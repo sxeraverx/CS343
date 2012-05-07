@@ -6,7 +6,7 @@ USEDLIBS = -lclang -lclangFrontendTool -lclangTooling \
 	-lclangLex -lclangBasic
 
 LDFLAGS = -g -O0 `llvm-config --ldflags`
-CXXFLAGS = -g -O0 `llvm-config --cxxflags`
+CXXFLAGS = -g -O0 `llvm-config --cxxflags` -fno-rtti --std=gnu++11
 
 LIBS = -lLLVM-3.1svn $(USEDLIBS)
 
