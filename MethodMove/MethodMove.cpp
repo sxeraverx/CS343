@@ -48,7 +48,7 @@ public:
             
             SourceRange R = M->getSourceRange();
             
-            llvm::outs() << ", body? " << M->hasBody() << ", from : ";
+            llvm::outs() << ", body? " << M->hasBody() << ", from: ";
             
             R.getBegin().print(llvm::outs(), ci->getSourceManager());
             
@@ -185,7 +185,7 @@ MyASTConsumer::MyASTConsumer(const char *f)
 
 bool MyASTConsumer::HandleTopLevelDecl(DeclGroupRef d)
 {
-    llvm::outs() << __PRETTY_FUNCTION__ << ": ";
+    llvm::outs() << "HandleTopLevelDecl: ";
     
     if (d.isSingleDecl()) {
         clang::Decl* D = d.getSingleDecl();
