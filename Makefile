@@ -1,5 +1,4 @@
-USEDLIBS = -lclang \
-	-lclangAnalysis \
+USEDLIBS = -lclangAnalysis \
 	-lclangAST \
 	-lclangBasic \
 	-lclangDriver \
@@ -10,32 +9,27 @@ USEDLIBS = -lclang \
 	-lclangRewrite \
 	-lclangSema \
 	-lclangSerialization \
-	-lclangTooling \
-	-lLLVMMC \
-	-lLLVMSupport
+	-lclangTooling
 
 UNAME = $(shell uname)
 
 COMMONFLAGS = -g -O0
+LIBS = `llvm-config --libs`  $(USEDLIBS)
+LDFLAGS = $(COMMONFLAGS) `llvm-config --ldflags`
+CXXFLAGS = $(COMMONFLAGS) `llvm-config --cxxflags` -fno-rtti
+CC=clang
+CXX=clang++
+LD=clang++
 
 ifeq ($(UNAME), Darwin)
-	LDFLAGS = $(COMMONFLAGS) `llvm-config --ldflags` -stdlib=libc++
-	CXXFLAGS = $(COMMONFLAGS) `llvm-config --cxxflags` -fno-rtti -std=c++0x -stdlib=libc++
+	LDFLAGS += -stdlib=libc++
+	CXXFLAGS += -std=c++0x -stdlib=libc++
 	## Use these for bleeding-edge Clang, otherwise use the one that comes with Xcode 
 	# CC=/usr/local/bin/clang
 	# CXX=/usr/local/bin/clang++
 	# LD=/usr/local/bin/clang++
-	CC=clang
-	CXX=clang++
-	LD=clang++
-	LIBS = $(USEDLIBS)
 else
-	LDFLAGS = $(COMMONFLAGS) `llvm-config --ldflags`
-	CXXFLAGS = $(COMMONFLAGS) `llvm-config --cxxflags` -fno-rtti --std=gnu++11
-	CC=clang
-	CXX=clang++
-	LD=clang++
-	LIBS = -lLLVM-3.1svn $(USEDLIBS)
+	CXXFLAGS += --std=gnu++11
 endif
 
 OUTPUT = clang-script
