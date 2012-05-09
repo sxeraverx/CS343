@@ -24,93 +24,28 @@ using namespace clang;
 
 namespace {
 
-template <typename T>
-class DAG {
-public:
-  class Node {
-  private:
-    T *data;
-  public:
-    Node() = delete;
-    Node(T *t) : data(t) {}
-    std::vector<Node> children;
-    void sortChildren() {
-      std::sort(children);
-      for(auto child = children.begin(); child != children.end(); child++) {
-	child->sortChildren();
-      }
-    }
-    bool operator==(Node &n) {return *data==*n.data;}
-    bool operator<(Node &n) {return *data<*n.data;}
-  };
-  
-  std::vector<Node> root;
-};
-
 class PrintFunctionsConsumer : public ASTConsumer {
 public:
   void HandleTranslationUnit(ASTContext &Ctx) override {
     const TranslationUnitDecl *topLevel = Ctx.getTranslationUnitDecl();
     
-    DAG<FunctionDecl> *depTree = new DAG<FunctionDecl>();
-    printNamespaceFunctions(topLevel, depTree);
-    delete depTree;
+    printNamespaceFunctions(topLevel);
   }
-  void addDependencies(const Stmt *body, DAG<FunctionDecl> *depTree, const FunctionDecl *fn_decl) const {
-    if(body) {
-      llvm::errs() << "\t";
-      body->getLocStart().print(llvm::errs(), fn_decl->getASTContext().getSourceManager());
-      llvm::errs() << " - ";
-      body->getLocEnd().print(llvm::errs(), fn_decl->getASTContext().getSourceManager());
-      llvm::errs() << "\n";
-      llvm::errs() << "\t" << fn_decl->hasPrototype() << "/" << fn_decl->hasWrittenPrototype() << "/" << fn_decl->isThisDeclarationADefinition() << "\n";
-    }
-  }
-  void printNamespaceFunctions(const DeclContext *ns_decl, DAG<FunctionDecl> *depTree) const
+  void printNamespaceFunctions(const DeclContext *ns_decl) const
   {
     for(auto subdecl = ns_decl->decls_begin(); subdecl != ns_decl->decls_end(); subdecl++) {
-      if(const FunctionDecl *fn_decl = dyn_cast<FunctionDecl>(*subdecl)) {
-	if(fn_decl->getASTContext().getSourceManager().isFromMainFile(fn_decl->getSourceRange().getBegin())) {
-	  if(const CXXMethodDecl *cxxm_decl = dyn_cast<CXXMethodDecl>(fn_decl)) {
-	    //only print the type if it would have to be printed in source
-	    if(cxxm_decl->isCopyAssignmentOperator())
-	      llvm::errs() << "[copy] ";
-	    else if(cxxm_decl->isMoveAssignmentOperator())
-	      llvm::errs() << "[move] ";
-	    else if(isa<CXXConstructorDecl>(cxxm_decl))
-	      llvm::errs() << "[ctor] ";
-	    else if(isa<CXXDestructorDecl>(cxxm_decl))
-	      llvm::errs() << "[dtor] ";
-	    else if(isa<CXXConversionDecl>(cxxm_decl))
-	      llvm::errs() << "[conv] ";
-	    else
-	      llvm::errs() << fn_decl->getResultType().getAsString() << " ";
-	  }
-	  else
-	    llvm::errs() << fn_decl->getResultType().getAsString() << " ";
-	  llvm::errs() << fn_decl->getQualifiedNameAsString();
-	  
-	  llvm::errs() << "(";
-	  for(auto param = fn_decl->param_begin(); param != fn_decl->param_end(); param++) {
-	    llvm::errs() << (*param)->getType().getAsString();
-	    (*param)->printName(llvm::errs());
-	    llvm::errs() << " ";
-	    if(param+1!=fn_decl->param_end()) {
-	      llvm::errs() << ", ";
-	    }
-	  }
-	  llvm::errs() << ")\n";
-	  
-	  addDependencies(fn_decl->getBody(), depTree, fn_decl);
+      if(const RecordDecl *rc_decl = dyn_cast<RecordDecl>(*subdecl)) {
+	llvm::errs() << rc_decl->getQualifiedNameAsString() << "\n";
+	for(auto member = rc_decl->field_begin(); member != rc_decl->field_end(); member++) {
+	  llvm::errs() << "\t" << member->getType().getAsString() << " " << member->getQualifiedNameAsString() << "\n";
 	}
       }
-      //functions are both functions and contexts themselves
+      //recurse into inner contexts
       if(const DeclContext *inner_dc_decl = dyn_cast<DeclContext>(*subdecl))
-	printNamespaceFunctions(inner_dc_decl, depTree);
+	printNamespaceFunctions(inner_dc_decl);
     }
   }
 };
-
 
 class PrintFunctionNamesAction : public PluginASTAction {
 protected:
@@ -119,7 +54,7 @@ protected:
   }
 
   virtual bool BeginInvocation(CompilerInstance &CI) override {
-    CI.getHeaderSearchOpts().AddPath("/usr/local/lib/clang/3.1/include", clang::frontend::System, false, false, false);
+    CI.getHeaderSearchOpts().AddPath("/usr/local/lib/clang/3.2/include", clang::frontend::System, false, false, false);
     return true;
   }
 
