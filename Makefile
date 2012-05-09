@@ -28,15 +28,16 @@ ifeq ($(UNAME), Darwin)
 	CC=clang
 	CXX=clang++
 	LD=clang++
+	LIBS = $(USEDLIBS)
 else
 	LDFLAGS = $(COMMONFLAGS) `llvm-config --ldflags`
 	CXXFLAGS = $(COMMONFLAGS) `llvm-config --cxxflags` -fno-rtti --std=gnu++11
 	CC=clang
 	CXX=clang++
 	LD=clang++
+	LIBS = -lLLVM-3.1svn $(USEDLIBS)
 endif
 
-LIBS = $(USEDLIBS)
 OUTPUT = clang-script
 OBJS = main.o
 
