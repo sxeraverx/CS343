@@ -14,7 +14,7 @@ USEDLIBS = -lclangAnalysis \
 UNAME = $(shell uname)
 
 COMMONFLAGS = -g -O0
-LIBS = `llvm-config --libs`  $(USEDLIBS)
+LIBS = `llvm-config --libs engine`  $(USEDLIBS)
 LDFLAGS = $(COMMONFLAGS) `llvm-config --ldflags`
 CXXFLAGS = $(COMMONFLAGS) `llvm-config --cxxflags` -fno-rtti
 CC=clang
