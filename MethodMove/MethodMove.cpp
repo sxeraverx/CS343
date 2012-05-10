@@ -51,6 +51,9 @@ public:
             llvm::outs() << "CXXRecordDecl: " << R->getDeclName().getAsString() << "\n";            
         }
         else if (isa<CXXMethodDecl>(D)) {
+            std::string capturedSource;
+            llvm::raw_string_ostream sst(capturedSource);
+            
             CXXMethodDecl* M = static_cast<CXXMethodDecl*>(D);
             llvm::outs() << "Method: " << M->getDeclName().getAsString();
             
@@ -61,22 +64,62 @@ public:
             // M->getNameInfo().getEndLoc().print(llvm::outs(), ci->getSourceManager());
             
             llvm::outs() << ", qualType: " << M->getResultType().getAsString();
+            llvm::outs() << ", constExpr? " << M->isConstexpr();
 
+            sst << M->getResultType().getAsString();
+            sst << " ";
             
-            for (auto I = M->param_begin(), E = M->param_end(); I != E; ++I) {
+            // TODO: Namespace?
+            sst << M->getParent()->getDeclName().getAsString();
+            sst << "::";
+            sst << M->getDeclName().getAsString();
+            sst << "(";
+
+            for (auto I = M->param_begin(), E = M->param_end(); I != E; ) {
                 llvm::outs() << ", param ";
                 PrintRange((*I)->getSourceRange(), ci->getSourceManager());
+                
+                const char* cdataBegin = ci->getSourceManager().getCharacterData((*I)->getSourceRange().getBegin());
+                const char* cdataEnd = ci->getSourceManager().getCharacterData((*I)->getSourceRange().getEnd());
+                std::string code(cdataBegin, cdataEnd - cdataBegin + 1);
+                sst << code;
+                
+                ++I;
+                if (I != E) {
+                    sst << ", ";
+                }
             }
+
+            sst << ")";
+            
+            // TODO: const modifier?
+            
             
             if (isa<CXXConstructorDecl>(D)) {
                 auto C = static_cast<CXXConstructorDecl*>(D);
-                
-                // grab the initializers
-                for (auto I = C->init_begin(), E = C->init_end(); I != E; ++I) {
-                    llvm::outs() << ", init'er ";
-                    PrintRange((*I)->getSourceRange(), ci->getSourceManager());
+                                
+                if (C->init_begin() != C->init_end()) {                
+                    
+                    sst << " : ";
+                    
+                    // grab the initializers
+                    for (auto I = C->init_begin(), E = C->init_end(); I != E; ) {
+                        llvm::outs() << ", init'er ";
+                        PrintRange((*I)->getSourceRange(), ci->getSourceManager());
+
+                        const char* cdataBegin = ci->getSourceManager().getCharacterData((*I)->getSourceRange().getBegin());
+                        const char* cdataEnd = ci->getSourceManager().getCharacterData((*I)->getSourceRange().getEnd());
+                        std::string code(cdataBegin, cdataEnd - cdataBegin + 1);
+                        sst << code;
+
+                        ++I;
+                        if (I != E) {
+                            sst << ", ";
+                        }                    
+
+                    }
+                    
                 }
-                
             }
             
             SourceRange R = M->getSourceRange();
@@ -101,6 +144,14 @@ public:
                 
                 std::string fn(F->getName());
                 if (fn.rfind(".h") != std::string::npos) {
+                    
+
+                    const char* cdataBegin = ci->getSourceManager().getCharacterData(LBL);
+                    const char* cdataEnd = ci->getSourceManager().getCharacterData(RBL);
+                    std::string code(cdataBegin, cdataEnd - cdataBegin + 1);
+                    sst << code;
+                    sst << "\n";
+                    
                     SourceLocation B = LBL;
                     
                     if (M->isInlineSpecified()) {
@@ -118,9 +169,19 @@ public:
                     LBL.print(llvm::outs(), ci->getSourceManager());        
                     llvm::outs() << ", to: ";
                     RBL.print(llvm::outs(), ci->getSourceManager());
-                    llvm::outs() << "\n";
+                    llvm::outs() << "\n\n";
+
+                    // write the code
+                    llvm::outs() << "captured source code: " << sst.str() << "\n";
+
+                    rewriteIDSet.insert(ci->getSourceManager().getMainFileID());
+                    auto leof = ci->getSourceManager().getLocForEndOfFile(ci->getSourceManager().getMainFileID());
+                    capturedSource.insert(0, "\n\n// ----\n");
+                    Rewrite.InsertText(leof, capturedSource);
                 }
+
             }
+            
         }
         
         bool traverseResult = RecursiveASTVisitor<MyRecursiveASTVisitor>::TraverseDecl(D);
