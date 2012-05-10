@@ -32,6 +32,14 @@ public:
     Rewriter Rewrite;
     CompilerInstance *ci;
     
+    static void PrintRange(const SourceRange& R, const SourceManager& SM) {
+        llvm::outs() << "(";
+        R.getBegin().print(llvm::outs(), SM);
+        llvm::outs() << " -- ";
+        R.getEnd().print(llvm::outs(), SM);
+        llvm::outs() << ")";
+    }
+    
     bool TraverseDecl(Decl *D)
     {
         if (isa<NamespaceDecl>(D)) {
@@ -45,6 +53,31 @@ public:
         else if (isa<CXXMethodDecl>(D)) {
             CXXMethodDecl* M = static_cast<CXXMethodDecl*>(D);
             llvm::outs() << "Method: " << M->getDeclName().getAsString();
+            
+            // llvm::outs() << ", nameInfo: " << M->getNameInfo().getAsString();
+            // llvm::outs() << ", beginLoc: ";
+            // M->getNameInfo().getBeginLoc().print(llvm::outs(), ci->getSourceManager());
+            // llvm::outs() << ", endLoc: ";
+            // M->getNameInfo().getEndLoc().print(llvm::outs(), ci->getSourceManager());
+            
+            llvm::outs() << ", qualType: " << M->getResultType().getAsString();
+
+            
+            for (auto I = M->param_begin(), E = M->param_end(); I != E; ++I) {
+                llvm::outs() << ", param ";
+                PrintRange((*I)->getSourceRange(), ci->getSourceManager());
+            }
+            
+            if (isa<CXXConstructorDecl>(D)) {
+                auto C = static_cast<CXXConstructorDecl*>(D);
+                
+                // grab the initializers
+                for (auto I = C->init_begin(), E = C->init_end(); I != E; ++I) {
+                    llvm::outs() << ", init'er ";
+                    PrintRange((*I)->getSourceRange(), ci->getSourceManager());
+                }
+                
+            }
             
             SourceRange R = M->getSourceRange();
             
