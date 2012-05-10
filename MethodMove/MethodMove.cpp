@@ -51,11 +51,22 @@ public:
             llvm::outs() << "CXXRecordDecl: " << R->getDeclName().getAsString() << "\n";            
         }
         else if (isa<CXXMethodDecl>(D)) {
+            CXXMethodDecl* M = static_cast<CXXMethodDecl*>(D);
+            llvm::outs() << "Method: " << M->getDeclName().getAsString();
+                
+            FullSourceLoc FSL(M->getNameInfo().getBeginLoc(), ci->getSourceManager());
+            const FileEntry* F = ci->getSourceManager().getFileEntryForID(FSL.getFileID());
+            llvm::outs() << "in: " << F->getName() << ", ";
+            
+            std::string fn(F->getName());
+            if (fn.find("/usr") != std::string::npos) {
+                return true;
+            }
+            
+            
             std::string capturedSource;
             llvm::raw_string_ostream sst(capturedSource);
             
-            CXXMethodDecl* M = static_cast<CXXMethodDecl*>(D);
-            llvm::outs() << "Method: " << M->getDeclName().getAsString();
             
             // llvm::outs() << ", nameInfo: " << M->getNameInfo().getAsString();
             // llvm::outs() << ", beginLoc: ";
@@ -143,7 +154,7 @@ public:
                 llvm::outs() << "in: " << F->getName() << ", ";
                 
                 std::string fn(F->getName());
-                if (fn.rfind(".h") != std::string::npos) {
+                if (fn.rfind(".h") != std::string::npos && fn.find("/usr") == std::string::npos) {
                     
 
                     const char* cdataBegin = ci->getSourceManager().getCharacterData(LBL);
