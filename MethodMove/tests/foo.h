@@ -2,13 +2,17 @@ namespace MyNameSpace {
     class Foo {
     private:
         int a;
+        int b;
     public:
         Foo()
         {
             a = 5;
+            b = 4;
         }
         
-        Foo(int x) : a(x) { }
+        Foo(int x) : a(x) { b = 3; }
+        
+        Foo(int* x) : a(*x), b(*x + 1) {}
         
         Foo(int x, int y);
         
@@ -27,6 +31,10 @@ namespace MyNameSpace {
         void test(int x);
         void test(int x, int y);
         
+        int testConstFunc(int x) const {
+            return a + x;
+        }
+        
         void inlineTest();
         void inlineTest(int x);
         
@@ -38,6 +46,15 @@ namespace MyNameSpace {
         const int getA() {
             return a;
         }
+        
+        static void StaticMethod() {
+        }
+    };
+    
+    class Bar : Foo {
+    public:
+        virtual void vtest() override {
+        }        
     };
     
     inline void Foo::inlineTest() {
