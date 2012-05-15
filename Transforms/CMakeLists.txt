@@ -1,1 +1,1 @@
-add_library (Transforms Transforms.cpp Accessors.cpp)
+add_library (Transforms Transforms.cpp Accessors.cpp ClassRenameTransform.cpp)
