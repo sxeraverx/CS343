@@ -2,6 +2,7 @@
 namespace SampleNameSpace {
   class Foo {
   private:
+    static int counter;
     int x;
     Foo *next;
     bool ownsNext;
@@ -22,6 +23,7 @@ namespace SampleNameSpace {
     }
 
     void wasteCycle();
+    void doNothing();
   };
 
   inline int Foo::getX() const {

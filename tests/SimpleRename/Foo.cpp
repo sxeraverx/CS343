@@ -1,5 +1,12 @@
 #include "foo.h"
 
+namespace SampleNameSpace {
+  int Foo::counter = 0;
+};
+
+void SampleNameSpace::Foo::doNothing() {
+}
+
 using namespace SampleNameSpace;
 
 void Foo::wasteCycle() {
