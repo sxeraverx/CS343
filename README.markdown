@@ -43,3 +43,12 @@ See http://scitools.com/blog/2012/04/cmake-and-understand.html for how to genera
 
     cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON <your build dir>
 
+
+## Testing ClassRenameTransform
+
+Use `test.sh`:
+
+    cd tests/SimpleRename
+    ./test.sh
+
+Make sure you rebuild the main project (by regenerating the Makefile then make) first before testing.
