@@ -73,8 +73,9 @@ public:
             // M->getNameInfo().getBeginLoc().print(llvm::outs(), ci->getSourceManager());
             // llvm::outs() << ", endLoc: ";
             // M->getNameInfo().getEndLoc().print(llvm::outs(), ci->getSourceManager());
-            
-            llvm::outs() << ", qualType: " << M->getResultType().getAsString();
+
+            llvm::outs() << ", qualifier: " << M->getTypeQualifiers();
+            llvm::outs() << ", return type: " << M->getResultType().getAsString();
             llvm::outs() << ", constExpr? " << M->isConstexpr();
 
             sst << M->getResultType().getAsString();
@@ -102,9 +103,11 @@ public:
             }
 
             sst << ")";
-            
-            // TODO: const modifier?
-            
+
+            // insert the const qualifier
+            if (M->getTypeQualifiers() & Qualifiers::Const) {
+                sst << " const";
+            }
             
             if (isa<CXXConstructorDecl>(D)) {
                 auto C = static_cast<CXXConstructorDecl*>(D);
