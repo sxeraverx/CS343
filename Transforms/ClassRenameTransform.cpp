@@ -4,15 +4,20 @@
 
 #include "Transforms.h"
 
+#include <set>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Sema/Sema.h>
 #include <llvm/Support/raw_ostream.h>
 #include <clang/Lex/Preprocessor.h>
+#include <clang/Rewrite/Rewriter.h>
 
 using namespace clang;
 
 class ClassRenameTransform : public Transform {
 private:
+  std::set<FileID> rewriteIDSet;
+  Rewriter rewriter;
+  
   Sema *sema;
   SourceManager *sourceMgr;
   std::string fromClassFullName;
@@ -66,8 +71,16 @@ public:
   
   void InitializeSema(Sema &S) override {
     this->sema = &S;
-    this->sourceMgr = &(S.getSourceManager());
+    this->sourceMgr = &(S.getSourceManager());    
   }
+  
+  virtual void setCompilerInstance(clang::CompilerInstance *CI) {
+    Transform::setCompilerInstance(CI);
+    rewriter.setSourceMgr(CI->getSourceManager(), CI->getLangOpts());
+  }
+  
+  
+  
 
   void HandleTranslationUnit(ASTContext &C) override {
     if (!enabled) {
@@ -76,6 +89,39 @@ public:
     
     const TranslationUnitDecl *TUD = C.getTranslationUnitDecl();
     renameClass(TUD);
+    
+    // output rewritten files
+    for (std::set<FileID>::iterator i = rewriteIDSet.begin(), e = rewriteIDSet.end(); i != e; ++i) {
+        const FileEntry* F = compilerInstance->getSourceManager().getFileEntryForID(*i);
+        
+        std::string outName(F->getName());
+        size_t ext = outName.rfind(".");
+        if (ext == std::string::npos) {
+            ext = outName.length();
+        }
+        
+        outName.insert(ext, "_out");
+        
+        llvm::errs() << "Output to: " << outName << "\n";
+        std::string OutErrorInfo;
+        
+        llvm::raw_fd_ostream outFile(outName.c_str(), OutErrorInfo, 0);
+
+        
+        if (OutErrorInfo.empty())
+        {
+            // Now output rewritten source code
+            const RewriteBuffer *RB = rewriter.getRewriteBufferFor(*i);
+            outFile << std::string(RB->begin(), RB->end());
+        }
+        else
+        {
+            llvm::errs() << "Cannot open " << outName << " for writing\n";
+        }
+
+        outFile.close();
+    }
+    
   }
   
   void renameClass(const DeclContext *DC)
@@ -143,6 +189,7 @@ public:
         llvm::errs() << indent() << "DeclaratorDecl, type: " << DD->getType().getAsString() << ", name: " << DD->getQualifiedNameAsString() << "\n";        
 
         // refactor value type
+        // TODO: need to do type inference and rewrite the type correctly
         if (DD->getType().getAsString() == fromClassFullName) {
           auto TSI = DD->getTypeSourceInfo();
           auto TL = TSI->getTypeLoc();
@@ -151,6 +198,14 @@ public:
           std::string speltType = captureTypeLocInfo(TL);
           llvm::errs() << indent() << "===> need rename, spelling: " << speltType << "\n";
           popIndent();
+          
+          Preprocessor &P = compilerInstance->getPreprocessor();
+          SourceLocation B = TL.getBeginLoc();
+          SourceLocation E = P.getLocForEndOfToken(TL.getEndLoc());
+          rewriter.ReplaceText(SourceRange(B, E), toClassName);
+          
+          FullSourceLoc FSL(B, *sourceMgr);
+          rewriteIDSet.insert(FSL.getFileID());
         }
       }
       else if (isa<NamespaceDecl>(*I)) {
