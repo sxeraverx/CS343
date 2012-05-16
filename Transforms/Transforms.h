@@ -3,11 +3,20 @@
 
 #include <clang/Sema/SemaConsumer.h>
 #include <clang/Tooling/Tooling.h>
+#include <clang/Frontend/CompilerInstance.h>
+
+class clang::CompilerInstance;
 
 class Transform : public clang::SemaConsumer
 {
+protected:
+  clang::CompilerInstance *compilerInstance;
 public:
+  Transform() : compilerInstance(0) {}
   virtual std::string getName() = 0;
+  virtual void setCompilerInstance(clang::CompilerInstance *CI) {
+    compilerInstance = CI;
+  }
 };
 
 template <typename T> Transform* transform_factory()

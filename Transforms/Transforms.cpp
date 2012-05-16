@@ -2,6 +2,7 @@
 
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendAction.h>
+#include <clang/Lex/Preprocessor.h>
 
 using namespace clang;
 using namespace clang::tooling;
@@ -40,7 +41,9 @@ public:
   TransformAction(transform_creator creator) {tcreator = creator;}
 protected:
   ASTConsumer *CreateASTConsumer(CompilerInstance &CI, llvm::StringRef) override {
-    return tcreator();
+    Transform *T = tcreator();
+    T->setCompilerInstance(&CI);
+    return T;
   }
 
   virtual bool BeginInvocation(CompilerInstance &CI) override {
