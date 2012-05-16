@@ -7,6 +7,7 @@
 #include <clang/Basic/SourceManager.h>
 #include <clang/Sema/Sema.h>
 #include <llvm/Support/raw_ostream.h>
+#include <clang/Lex/Preprocessor.h>
 
 using namespace clang;
 
@@ -32,9 +33,10 @@ private:
   }
   
   const std::string captureTypeLocInfo(TypeLoc& TL) {
+    Preprocessor &P = compilerInstance->getPreprocessor();
+    SourceLocation E = P.getLocForEndOfToken(TL.getEndLoc());
     const char* cdataBegin = sourceMgr->getCharacterData(TL.getBeginLoc());
-    const char* cdataEnd = sourceMgr->getCharacterData(TL.getEndLoc());
-    
+    const char* cdataEnd = sourceMgr->getCharacterData(E);
     return std::string(cdataBegin, cdataEnd - cdataBegin + 1);    
   }
 
@@ -138,7 +140,7 @@ public:
         }
       }
       else if (const DeclaratorDecl *DD = dyn_cast<DeclaratorDecl>(*I)) {
-        llvm::errs() << indent() << "DeclaratorDecl " << DD->getType().getAsString() << " " << DD->getQualifiedNameAsString() << "\n";        
+        llvm::errs() << indent() << "DeclaratorDecl, type: " << DD->getType().getAsString() << ", name: " << DD->getQualifiedNameAsString() << "\n";        
 
         // refactor value type
         if (DD->getType().getAsString() == fromClassFullName) {
