@@ -1,28 +1,37 @@
-CMAKE_MINIMUM_REQUIRED (VERSION 2.6)
+CMAKE_MINIMUM_REQUIRED (VERSION 2.8)
 
+PROJECT (Refactorial)
+
+SET(CMAKE_DISABLE_SOURCE_CHANGES ON)
+SET(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 SET(CMAKE_BUILD_TYPE None)
 SET(CMAKE_C_COMPILER clang)
 SET(CMAKE_CXX_COMPILER clang++)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_LINKER_FLAGS} -g -fno-rtti -fcolor-diagnostics -Wno-c++11-extensions")
+SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_CXX_LINKER_FLAGS} -g -fno-rtti")
 IF(APPLE)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_LINKER_FLAGS} -std=c++0x -stdlib=libc++ -fno-rtti -all_load")
-    SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -stdlib=libc++ -fno-rtti -all_load")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ --std=c++0x")
+  SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -stdlib=libc++")
 ELSE(APPLE)
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_LINKER_FLAGS} --std=gnu++0x -fno-rtti")
-    SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fno-rtti")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++11")
 ENDIF(APPLE)
-
-PROJECT (Refactorial)
 
 FIND_PACKAGE(LLVM REQUIRED)
 
 ADD_DEFINITIONS(${LLVM_DEFINITIONS})
-INCLUDE_DIRECTORIES(${LLVM_INCLUDE_DIRS})
+INCLUDE_DIRECTORIES(${LLVM_INCLUDE_DIRS} .)
 LINK_DIRECTORIES(${LLVM_LIBRARY_DIRS})
 LLVM_MAP_COMPONENTS_TO_LIBRARIES(REQ_LLVM_LIBRARIES native)
 
 SET(CLANG_LIBRARIES clangAnalysis clangAST clangBasic clangDriver clangEdit clangFrontend clangLex clangParse clangRewrite clangSema clangSerialization clangTooling)
 
-ADD_SUBDIRECTORY (Transforms)
+SET(Transforms_sources Transforms.cpp Accessors.cpp MethodMove/MethodMove.cpp)
 
-ADD_EXECUTABLE (refactorial main.cpp)
-TARGET_LINK_LIBRARIES (refactorial ${REQ_LLVM_LIBRARIES} ${CLANG_LIBRARIES} Transforms)
+FOREACH(arg ${Transforms_sources})
+  LIST(APPEND sources "Transforms/${arg}")
+ENDFOREACH(arg ${Transforms_sources})
+
+SET(sources ${sources} main.cpp)
+
+ADD_EXECUTABLE (refactorial ${sources} )
+TARGET_LINK_LIBRARIES (refactorial ${REQ_LLVM_LIBRARIES} ${CLANG_LIBRARIES})

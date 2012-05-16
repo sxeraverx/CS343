@@ -1,8 +1,17 @@
+*~
+
+# Test results
+tests/*/*_out.cpp
+tests/*/*_out.h
+
+# Built binaries
+*.a
+Build
+
+# CMake generated files
 CMakeCache.txt
 CMakeFiles
 Makefile
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json
-*.a
-refactorial
