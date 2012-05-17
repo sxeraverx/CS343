@@ -38,7 +38,7 @@ private:
   }
   
   const std::string captureTypeLocInfo(TypeLoc& TL) {
-    Preprocessor &P = compilerInstance->getPreprocessor();
+    Preprocessor &P = sema->getPreprocessor();
     SourceLocation E = P.getLocForEndOfToken(TL.getEndLoc());
     const char* cdataBegin = sourceMgr->getCharacterData(TL.getBeginLoc());
     const char* cdataEnd = sourceMgr->getCharacterData(E);
@@ -69,19 +69,6 @@ public:
     return "ClassRenameTransform";
   }
   
-  void InitializeSema(Sema &S) override {
-    this->sema = &S;
-    this->sourceMgr = &(S.getSourceManager());    
-  }
-  
-  virtual void setCompilerInstance(clang::CompilerInstance *CI) {
-    Transform::setCompilerInstance(CI);
-    rewriter.setSourceMgr(CI->getSourceManager(), CI->getLangOpts());
-  }
-  
-  
-  
-
   void HandleTranslationUnit(ASTContext &C) override {
     if (!enabled) {
       return;
@@ -92,7 +79,7 @@ public:
     
     // output rewritten files
     for (std::set<FileID>::iterator i = rewriteIDSet.begin(), e = rewriteIDSet.end(); i != e; ++i) {
-        const FileEntry* F = compilerInstance->getSourceManager().getFileEntryForID(*i);
+        const FileEntry* F = sema->getSourceManager().getFileEntryForID(*i);
         
         std::string outName(F->getName());
         size_t ext = outName.rfind(".");
@@ -199,7 +186,7 @@ public:
           llvm::errs() << indent() << "===> need rename, spelling: " << speltType << "\n";
           popIndent();
           
-          Preprocessor &P = compilerInstance->getPreprocessor();
+          Preprocessor &P = sema->getPreprocessor();
           SourceLocation B = TL.getBeginLoc();
           SourceLocation E = P.getLocForEndOfToken(TL.getEndLoc());
           rewriter.ReplaceText(SourceRange(B, E), toClassName);
