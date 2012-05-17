@@ -16,9 +16,7 @@ using namespace clang;
 class ClassRenameTransform : public Transform {
 private:
   std::set<FileID> rewriteIDSet;
-  Rewriter rewriter;
   
-  Sema *sema;
   SourceManager *sourceMgr;
   std::string fromClassFullName;
   std::string toClassName;
@@ -39,6 +37,7 @@ private:
   
   const std::string captureTypeLocInfo(TypeLoc& TL) {
     Preprocessor &P = sema->getPreprocessor();
+    
     SourceLocation E = P.getLocForEndOfToken(TL.getEndLoc());
     const char* cdataBegin = sourceMgr->getCharacterData(TL.getBeginLoc());
     const char* cdataEnd = sourceMgr->getCharacterData(E);
@@ -74,6 +73,8 @@ public:
       return;
     }
     
+    sourceMgr = &sema->getSourceManager();
+    
     const TranslationUnitDecl *TUD = C.getTranslationUnitDecl();
     renameClass(TUD);
     
@@ -108,12 +109,12 @@ public:
 
         outFile.close();
     }
-    
   }
   
   void renameClass(const DeclContext *DC)
   {
     for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
+      
       // records
       if(const RecordDecl *RD = dyn_cast<RecordDecl>(*I)) {
         llvm::errs() << indent() << "RecordDecl " << RD->getQualifiedNameAsString() << "\n";
