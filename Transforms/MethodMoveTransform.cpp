@@ -110,7 +110,7 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
     return;
   }
 
-  llvm::errs() << "CXXRecordDecl " << CRD->getQualifiedNameAsString() << "\n";
+  llvm::errs() << "Rewriting: " << CRD->getQualifiedNameAsString() << "\n";
   
   // the right brace location of this CXXRecordDecl
   // nothing beyond that location is taken into consideration
