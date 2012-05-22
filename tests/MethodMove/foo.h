@@ -27,7 +27,7 @@ namespace MyNameSpace {
         
 		Foo(int x) : a(x) { b = 3; }
 		
-		Foo(int* x) : a(*x), b(*x + 1) {}
+		Foo(const int* x) : a(*x), b(*x + 1) {}
         
 		Foo(int x, int y);
         
@@ -50,11 +50,15 @@ namespace MyNameSpace {
 			return a + x;
 		}
 
-		int testConstFunc(int x, int y, int z = 5) const {
+		int testConstFunc(int x, int &y, int z = 5) const {
 			return a + x + y + z;
 		}
 
-        
+    const int const *meaningLess(int x, float const*) const {
+      return &a;
+    }
+    
+    
 		void inlineTest();
 		void inlineTest(int x);
         

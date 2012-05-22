@@ -24,22 +24,17 @@ public:
 	
   
 protected:
-  std::set<FileID> rewriteIDSet;
   void processDeclContext(DeclContext *DC);
   void processCXXRecordDecl(CXXRecordDecl *CRD);
   void collectNamespaceInfo(DeclContext *DC, SourceLocation& EL,
                             std::string& outHeader,
                             std::string& outFooter);
-  std::string writeImplMethodDecl(CXXMethodDecl *MD);
+  std::string rewriteMethodInHeader(CXXMethodDecl *M);
   
 protected:
   // TODO: move these to a utility
-  std::string captureSourceText(SourceRange R)
-  {
-    return captureSourceText(R.getBegin(), R.getEnd());
-  }
-
-  std::string captureSourceText(SourceLocation B, SourceLocation E);
+  std::string captureSourceText(SourceLocation B, SourceLocation E,
+                                bool endBeyondToken = false);
 };
 
 REGISTER_TRANSFORM(MethodMoveTransform);
@@ -47,40 +42,40 @@ REGISTER_TRANSFORM(MethodMoveTransform);
   
 void MethodMoveTransform::HandleTranslationUnit(ASTContext &C)
 {
-    auto TUD = C.getTranslationUnitDecl();
-    processDeclContext(TUD);
-    
-    // output rewritten files
-    // TODO: move this to a utility class
-    for (auto I = rewriteIDSet.begin(), E = rewriteIDSet.end(); I != E; ++I) {
-        auto F = sema->getSourceManager().getFileEntryForID(*I);
-        
-        std::string outName(F->getName());
-        size_t ext = outName.rfind(".");
-        if (ext == std::string::npos) {
-            ext = outName.length();
-        }
-        
-        outName.insert(ext, ".refactored");
-        
-        llvm::errs() << "Output to: " << outName << "\n";
-        
-        std::string outErrorInfo;
-        
-        llvm::raw_fd_ostream outFile(outName.c_str(), outErrorInfo, 0);
-        
-        if (outErrorInfo.empty()) {
-            // Now output rewritten source code
-            auto RB = rewriter.getRewriteBufferFor(*I);
-            outFile << std::string(RB->begin(), RB->end());
-        }
-        else {
-            llvm::errs() << "Cannot open " << outName << " for writing\n";
-        }
+  auto TUD = C.getTranslationUnitDecl();
+  processDeclContext(TUD);
 
-        outFile.close();
+  // output rewritten files
+  // TODO: move this to a utility class
+  for (auto I = rewriter.buffer_begin(), E = rewriter.buffer_end();
+       I != E; ++I) {
+
+    auto F = rewriter.getSourceMgr().getFileEntryForID(I->first);
+    std::string outName(F->getName());
+    size_t ext = outName.rfind(".");
+    if (ext == std::string::npos) {
+      ext = outName.length();
     }
+
+    outName.insert(ext, ".refactored");
+
+    llvm::errs() << "Output to: " << outName << "\n";
+    std::string outErrInfo;
+
+    llvm::raw_fd_ostream outFile(outName.c_str(), outErrInfo, 0);
+
+    if (outErrInfo.empty()) {
+      // output rewritten source code
+      auto RB = &I->second;
+      outFile << std::string(RB->begin(), RB->end());
+    }
+    else {
+      llvm::errs() << "Cannot open " << outName << " for writing\n";
+    }
+
+    outFile.close();
   }
+}
   
 void MethodMoveTransform::processDeclContext(DeclContext *DC)
 {  
@@ -112,19 +107,26 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
   
   std::string sourceHeader;
   std::string sourceFooter;
+  std::string aggregateSource;
   collectNamespaceInfo(CRD->getParent(), CRDRBL, sourceHeader, sourceFooter);
 
-
-  // llvm::errs() << "header:\n" << sourceHeader << "\n\n";
-  // llvm::errs() << "footer:\n" << sourceFooter << "\n\n";
-
+  aggregateSource += "\n";
+  
+  aggregateSource += "\n\n";
+  aggregateSource += "// ";
+  aggregateSource += std::string(70, '-');
+  aggregateSource += "\n// refactorial MethodMoveTransform output\n";
+  aggregateSource += "// ";
+  aggregateSource += std::string(70, '-');
+  aggregateSource += "\n\n";
+  
+  aggregateSource += sourceHeader;
+  aggregateSource += "\n\n";
 
   // methods, this include all ctors and dtors
   for (auto MI = CRD->method_begin(), ME = CRD->method_end();
        MI != ME; ++MI) {
-      auto DNI = MI->getNameInfo();
-      auto MN = DNI.getName().getAsString();
-    
+
       if (0) {
         continue;
       }
@@ -148,12 +150,18 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
         continue;
       }
     
-      llvm::errs() << "handle " << MN << "\n";
-    
-      std::string&& b = writeImplMethodDecl(&*MI);
-      llvm::errs() << b;
+      std::string&& B = rewriteMethodInHeader(&*MI);
+      aggregateSource += B;
+      aggregateSource += "\n";
+  }
+  
+  aggregateSource += sourceFooter;
 
-  }  
+
+  // write the source
+  auto MFI = rewriter.getSourceMgr().getMainFileID();
+  auto LEOF = rewriter.getSourceMgr().getLocForEndOfFile(MFI);
+  rewriter.InsertText(LEOF, aggregateSource);
 }
 
 void MethodMoveTransform::collectNamespaceInfo(DeclContext *DC,
@@ -213,38 +221,50 @@ void MethodMoveTransform::collectNamespaceInfo(DeclContext *DC,
   }
 }
 
-std::string MethodMoveTransform::writeImplMethodDecl(CXXMethodDecl *MD)
+std::string MethodMoveTransform::rewriteMethodInHeader(CXXMethodDecl *M)
 {
   std::string src;
   llvm::raw_string_ostream sst(src);
   
   // return type  
-  sst << MD->getResultType().getAsString();
+  sst << M->getResultType().getAsString();
   sst << " ";
 
   // method name
-  sst << MD->getParent()->getDeclName().getAsString();
+  sst << M->getParent()->getDeclName().getAsString();
   sst << "::";
-  sst << MD->getDeclName().getAsString();
+  sst << M->getDeclName().getAsString();
   
   // parameter list
-  auto PI = MD->param_begin();
-  auto PE = MD->param_end();
+  auto PI = M->param_begin();
+  auto PE = M->param_end();
   auto LPE = PI;
 
   sst << "(";
+  
   while (PI != PE) {
+    // get param type
+    auto PTSI = (*PI)->getTypeSourceInfo();
+    auto PTL = PTSI->getTypeLoc();
+    auto PTLB = PTL.getLocStart();
+    auto PTLE = sema->getPreprocessor().getLocForEndOfToken(PTL.getEndLoc());
+    sst << captureSourceText(PTLB, PTLE, true);
 
-    SourceRange SR = (*PI)->getSourceRange();
-    sst << captureSourceText(SR);
-    
-    if ((*PI)->hasDefaultArg()) {
-      llvm::errs() << captureSourceText((*PI)->getDefaultArgRange());
+    auto PN = (*PI)->getName();
+    if (PN.size()) {
+      // determine if we need to insert a space between type and param
+      // this deals with the variants of T* x, T* x, etc.
+      const char *cdataEnd = sema->getSourceManager().getCharacterData(PTLE);
+      
+      if (*cdataEnd == ' ' || *cdataEnd == '\t') {      
+        sst << " ";
+      }
+      
+      sst << PN;
     }
 
-
+    // keep track of the last param
     LPE = PI;
-
     ++PI;
     if (PI != PE) {
       sst << ", ";
@@ -253,17 +273,39 @@ std::string MethodMoveTransform::writeImplMethodDecl(CXXMethodDecl *MD)
 
   sst << ")";
 
-  
-  
-  sst << "\n\n";
-  
+  // insert the const qualifier
+  if (M->getTypeQualifiers() & Qualifiers::Const) {
+    sst << " const";
+  }
+
+  // obtain the method's type info
+  auto MTSI = M->getTypeSourceInfo();
+  auto MTL = MTSI->getTypeLoc();
+  auto MTLE = sema->getPreprocessor().getLocForEndOfToken(MTL.getEndLoc());
+
+  // obtain the end of the body
+  SourceLocation MBE = M->getBody()->getLocEnd();
+
+  // we capture everything between the location past the method's type
+  // and the right brace of the body, inclusive; this has a desired side
+  // effect: the ctor's initializers (if exist) will also be included
+  sst << captureSourceText(MTLE, MBE);
+  sst << "\n";
+
+  // replace the body with ;
+  rewriter.ReplaceText(SourceRange(MTLE, MBE), ";");
+
+  // return the captured source  
+  // TODO: re-indent the source  
   return sst.str();
 }
 
 std::string MethodMoveTransform::captureSourceText(SourceLocation B,
-                                                   SourceLocation E)
+                                                   SourceLocation E,
+                                                   bool endBeyondToken)
 {
   const char *cdataBegin = sema->getSourceManager().getCharacterData(B);
-  const char *cdataEnd = rewriter.getSourceMgr().getCharacterData(E);
-  return std::string(cdataBegin, cdataEnd - cdataBegin + 1);
+  const char *cdataEnd = sema->getSourceManager().getCharacterData(E);
+  return std::string(cdataBegin,
+                     cdataEnd - cdataBegin + (endBeyondToken ? 0 : 1));
 }
