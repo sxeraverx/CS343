@@ -52,3 +52,21 @@ Use `test.sh`:
     ./test.sh
 
 Make sure you rebuild the main project (by regenerating the Makefile then make) first before testing.
+
+
+## MethodMoveTransform
+
+MethodMoveTransform moves all method bodies in the designated class to the
+implementation file.
+
+*   Input: `BATCH_MOVE_CLASS_NAME`
+
+To test MethodMoveTransform:
+
+Use `test.sh`:
+
+    cd tests/MethodMove
+    ./test.sh
+
+Make sure you rebuild the main project (by regenerating the Makefile then make) first before testing.
+
