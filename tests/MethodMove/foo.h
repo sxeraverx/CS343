@@ -1,10 +1,26 @@
+namespace B {};
+namespace C { 
+    void blah();
+};
+
+
+
+namespace A {
+    using namespace B;
+    using namespace C;
+
 namespace MyNameSpace {
+    using namespace C;
+    
 	class Foo {
+	protected:
+        class Inner {};
 	private:
 		int a;
 		int b;
 	public:
 		Foo() {
+            blah();
 			a = 5;
 			b = 4;
 		}
@@ -33,6 +49,11 @@ namespace MyNameSpace {
 		int testConstFunc(int x) const {
 			return a + x;
 		}
+
+		int testConstFunc(int x, int y, int z = 5) const {
+			return a + x + y + z;
+		}
+
         
 		void inlineTest();
 		void inlineTest(int x);
@@ -52,7 +73,7 @@ namespace MyNameSpace {
     
 	class Bar : Foo {
 	public:
-		virtual void vtest() override {
+		virtual void vtest() {
 		}        
 	};
     
@@ -65,3 +86,5 @@ inline void MyNameSpace::Foo::inlineTest(int x) {
 	a = 8;
 }
 
+
+};
