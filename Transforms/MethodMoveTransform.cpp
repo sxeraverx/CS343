@@ -69,6 +69,7 @@ void MethodMoveTransform::HandleTranslationUnit(ASTContext &C)
 
     outName.insert(ext, ".refactored");
 
+    // TODO: Use diagnostics for error report?
     llvm::errs() << "Output to: " << outName << "\n";
     std::string outErrInfo;
 
