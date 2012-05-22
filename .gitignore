@@ -3,6 +3,7 @@
 # Test results
 tests/*/*_out.cpp
 tests/*/*_out.h
+tests/*/*.refactored*
 
 # Built binaries
 *.a
@@ -15,3 +16,6 @@ Makefile
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json
+
+# output
+refactorial

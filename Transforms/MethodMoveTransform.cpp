@@ -24,6 +24,8 @@ public:
 	
   
 protected:
+  std::string movingClassName;
+  
   void processDeclContext(DeclContext *DC);
   void processCXXRecordDecl(CXXRecordDecl *CRD);
   void collectNamespaceInfo(DeclContext *DC, SourceLocation& EL,
@@ -42,6 +44,14 @@ REGISTER_TRANSFORM(MethodMoveTransform);
   
 void MethodMoveTransform::HandleTranslationUnit(ASTContext &C)
 {
+  const char *P = getenv("BATCH_MOVE_CLASS_NAME");
+  if (!P) {
+    llvm::errs() << "MethodMoveTransform not enabled.\n";
+    return;
+  }
+
+  movingClassName = P;
+  
   auto TUD = C.getTranslationUnitDecl();
   processDeclContext(TUD);
 
@@ -94,8 +104,8 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
 {
   // // TODO: handle nested class
   // processDeclContext(CRD);
-
-  if (CRD->getQualifiedNameAsString() != "A::MyNameSpace::Foo") {
+  
+  if (movingClassName != CRD->getQualifiedNameAsString()) {
     return;
   }
 
@@ -226,9 +236,11 @@ std::string MethodMoveTransform::rewriteMethodInHeader(CXXMethodDecl *M)
   std::string src;
   llvm::raw_string_ostream sst(src);
   
-  // return type  
-  sst << M->getResultType().getAsString();
-  sst << " ";
+  // return type (but no type if ctor or dtor)
+  if (!isa<CXXConstructorDecl>(M) && !isa<CXXDestructorDecl>(M)) {
+    sst << M->getResultType().getAsString();
+    sst << " ";
+  }
 
   // method name
   sst << M->getParent()->getDeclName().getAsString();
@@ -244,11 +256,11 @@ std::string MethodMoveTransform::rewriteMethodInHeader(CXXMethodDecl *M)
   
   while (PI != PE) {
     // get param type
+    auto PIB = (*PI)->getSourceRange().getBegin();
     auto PTSI = (*PI)->getTypeSourceInfo();
     auto PTL = PTSI->getTypeLoc();
-    auto PTLB = PTL.getLocStart();
     auto PTLE = sema->getPreprocessor().getLocForEndOfToken(PTL.getEndLoc());
-    sst << captureSourceText(PTLB, PTLE, true);
+    sst << captureSourceText(PIB, PTLE, true);
 
     auto PN = (*PI)->getName();
     if (PN.size()) {
