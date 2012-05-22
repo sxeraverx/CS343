@@ -197,7 +197,7 @@ void MethodMoveTransform::collectNamespaceInfo(DeclContext *DC,
     outFooter.insert(0, footer);
   }
   
-  // TODO: Insert ident
+  // TODO: Insert indent
   
   // TODO: Discuss on the mailing list, these iterators only gives the *last*
   // instance of using, e.g.:
