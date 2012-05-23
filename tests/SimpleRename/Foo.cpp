@@ -1,4 +1,4 @@
-#include "foo.h"
+#include "Foo.h"
 
 namespace SampleNameSpace {
   int Foo::counter = 0;
@@ -27,7 +27,7 @@ Foo test(Foo *a) {
   return Foo(a);
 }
 
-Foo globalFoo;
+::SampleNameSpace::Foo globalFoo;
 
 int main() {
   class Bar {

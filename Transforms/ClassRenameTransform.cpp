@@ -114,7 +114,13 @@ public:
   void renameClass(const DeclContext *DC)
   {
     for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
-      
+      // FullSourceLoc FSL((*I)->getLocStart(), sema->getSourceManager());
+      // auto F = sema->getSourceManager().getFileEntryForID(FSL.getFileID());
+      // std::string fn(F->getName());
+      // if (fn.find("/usr") != std::string::npos) {
+      //   continue;
+      // }
+      // 
       // records
       if(const RecordDecl *RD = dyn_cast<RecordDecl>(*I)) {
         llvm::errs() << indent() << "RecordDecl " << RD->getQualifiedNameAsString() << "\n";
