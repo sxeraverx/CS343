@@ -35,6 +35,13 @@ private:
     indentLevel--;
   }
   
+  std::string loc(SourceLocation L) {
+    std::string src;
+    llvm::raw_string_ostream sst(src);
+    L.print(sst, sema->getSourceManager());
+    return sst.str();
+  }
+  
   const std::string captureTypeLocInfo(TypeLoc& TL) {
     Preprocessor &P = sema->getPreprocessor();
     
@@ -179,6 +186,7 @@ public:
           }          
         }
       }
+/*      
       else if (const DeclaratorDecl *DD = dyn_cast<DeclaratorDecl>(*I)) {
         llvm::errs() << indent() << "DeclaratorDecl, type: " << DD->getType().getAsString() << ", name: " << DD->getQualifiedNameAsString() << "\n";        
 
@@ -202,6 +210,84 @@ public:
           rewriteIDSet.insert(FSL.getFileID());
         }
       }
+*/
+      else if (const VarDecl *VD = dyn_cast<VarDecl>(*I)) {
+        llvm::errs() << indent() << "VarDecl, type: " << VD->getType().getAsString() << ", name: " << VD->getQualifiedNameAsString() << "\n";        
+
+        auto TSI = VD->getTypeSourceInfo();
+        auto TL = TSI->getTypeLoc();
+        auto QT = TSI->getType();
+        
+        pushIndent();
+        while (!TL.isNull()) {
+          auto TLQT = TL.getType();
+          
+          llvm::errs() << indent()
+            << "TypeLoc"
+            << ", typeLocClass: " << TL.getTypeLocClass()
+            << "\n" << indent() << "qualType as str: " << TLQT.getAsString()
+            << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+            << "\n" << indent() << "endLoc: " << loc(TL.getEndLoc())
+            << "\n" << indent() << "local beginLoc: " << loc(TL.getLocalSourceRange().getBegin())
+            << "\n" << indent() << "local endLoc: " << loc(TL.getLocalSourceRange().getEnd())
+            << "\n" << indent() << "unqualified beginLoc: " << loc(TL.getUnqualifiedLoc().getBeginLoc())
+            << "\n";
+            
+          llvm::errs() << indent() << "typeLoc class: ";
+          switch(TL.getTypeLocClass()) {
+            case TypeLoc::TypeLocClass::Pointer:
+              llvm::errs() << "pointer";
+              break;
+
+            case TypeLoc::TypeLocClass::LValueReference:
+              llvm::errs() << "LValueReference";
+              break;
+
+            case TypeLoc::TypeLocClass::RValueReference:
+              llvm::errs() << "RValueReference";
+              break;
+
+            case TypeLoc::TypeLocClass::Elaborated:
+              llvm::errs() << "Elaborated";
+              break;
+
+            case TypeLoc::TypeLocClass::Record:
+              llvm::errs() << "Record";
+              if (TLQT.getAsString() == fromClassFullName) {
+
+                pushIndent();
+                std::string speltType = captureTypeLocInfo(TL);
+                llvm::errs() << indent() << "===> need rename, spelling: " << speltType << "\n";
+                popIndent();
+
+                Preprocessor &P = sema->getPreprocessor();
+                SourceLocation B = TL.getBeginLoc();
+                SourceLocation E = P.getLocForEndOfToken(TL.getBeginLoc()).getLocWithOffset(-1);
+                rewriter.ReplaceText(SourceRange(B, E), toClassName);
+
+                FullSourceLoc FSL(B, *sourceMgr);
+                rewriteIDSet.insert(FSL.getFileID());
+              }
+              
+              break;
+
+            
+            case TypeLoc::TypeLocClass::Qualified:
+              llvm::errs() << "qualified: " << TLQT.getQualifiers();
+              break;
+            
+              
+            default:
+              llvm::errs() << TL.getTypeLocClass();
+          }
+          llvm::errs() << "\n";
+            
+            
+          TL = TL.getNextTypeLoc();
+        }
+        popIndent();
+      }
+      
       else if (isa<NamespaceDecl>(*I)) {
         NamespaceDecl *ND = dyn_cast<NamespaceDecl>(*I);
         llvm::errs() << indent() << "NamespaceDecl " << ND->getQualifiedNameAsString() << "\n";        
