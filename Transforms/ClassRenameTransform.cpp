@@ -227,6 +227,7 @@ public:
             << ", typeLocClass: " << TL.getTypeLocClass()
             << "\n" << indent() << "qualType as str: " << TLQT.getAsString()
             << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+            << "\n" << indent() << "isMacro: " << TL.getBeginLoc().isMacroID()
             << "\n" << indent() << "endLoc: " << loc(TL.getEndLoc())
             << "\n" << indent() << "local beginLoc: " << loc(TL.getLocalSourceRange().getBegin())
             << "\n" << indent() << "local endLoc: " << loc(TL.getLocalSourceRange().getEnd())
@@ -250,6 +251,14 @@ public:
             case TypeLoc::TypeLocClass::Elaborated:
               llvm::errs() << "Elaborated";
               break;
+              
+            case TypeLoc::TypeLocClass::TemplateSpecialization:
+              llvm::errs() << "TemplateSpecialization";
+              if (auto TSTL = dyn_cast<TemplateSpecializationTypeLoc>(&TL)) {
+                llvm::errs() << ", args: " << TSTL->getNumArgs();
+              }
+              break;
+            
 
             case TypeLoc::TypeLocClass::Record:
               llvm::errs() << "Record";
@@ -271,6 +280,7 @@ public:
               
               break;
 
+            
             
             case TypeLoc::TypeLocClass::Qualified:
               llvm::errs() << "qualified: " << TLQT.getQualifiers();
