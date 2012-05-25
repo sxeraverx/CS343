@@ -12,6 +12,11 @@ int C::Nana::add(int x) {
 typedef std::vector<const A::Foo*> fvcp;
 typedef std::vector<A::Foo*> fvp;
 
+A::Foo test(A::Foo &a) {
+  A::Foo b = a;
+  return b;
+}
+
 int main()
 {
   C::Nana n;
