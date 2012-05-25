@@ -1,6 +1,6 @@
 #!/bin/sh
-export FROM_CLASS_NAME="class SampleNameSpace::Foo"
-export TO_CLASS_NAME="Foobar"
+export FROM_TYPE_QUALIFIED_NAME="class A::Foo"
+export TO_TYPE_NAME="Foobar"
 cd ../../
 make
 cd -
