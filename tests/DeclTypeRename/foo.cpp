@@ -23,6 +23,14 @@ A::Foo foo(A::Foo a, A::Foo* b, A::Foo& c, A::Foo***)
   return A::Foo(5);
 }
 
+namespace A {
+  Foo foo2(Foo a, Foo* b, Foo& c, Foo***)
+  {
+    return Foo(5);
+  }  
+};
+
+
 
 int main()
 {
@@ -78,4 +86,9 @@ void test()
   class BBB {
     Foo b;
   };
+}
+
+Foo foo3(Foo a, Foo* b, Foo& c, Foo***)
+{
+  return Foo(5);
 }

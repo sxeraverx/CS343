@@ -1,7 +1,11 @@
 // #include <string>
 
 namespace A {
-  class Foo {
+  class X {
+    
+  };
+  
+  class Foo : public X {
   protected:
     int x;
   public:
@@ -51,6 +55,12 @@ namespace C {
     Foo f;
     int add(int x);
   };
+  
+  class Nada {
+    Foo *f;
+  public:
+    Nada() : f(new Foo) {}
+    ~Nada() { delete f; }
+  };
 };
-
 
