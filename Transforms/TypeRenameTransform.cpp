@@ -22,6 +22,7 @@ protected:
   void processDeclContext(DeclContext *DC);  
   void processStmt(Stmt *S);
   void processTypeLoc(TypeLoc TL);
+  void processTypeLoc(TypeLoc TL, TypeLoc &headTL);
   void writeOutput();
   
   // TODO: Move these to a utility
@@ -114,33 +115,22 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
   pushIndent();
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
-    if (auto RD = dyn_cast<RecordDecl>(*I)) {
+    if (auto TD = dyn_cast<TagDecl>(*I)) {
+      // handle tag decls (enum, struct, union, class)
+      Preprocessor &P = sema->getPreprocessor();
+      auto BL = TD->getLocation();
       
-      // This turns out to be a non-trivial task to obtain the name
-      
-      // TODO: Rename record
+      if (BL.isValid()) {    
+        auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
+        auto QTNS = TD->getQualifiedNameAsString();
 
-      // auto BL = RD->getLocStart();
-      // auto EL = RD->getLocEnd();
-      // auto TK = RD->getTagKind();
-      // llvm::errs() << indent() << RD->getQualifiedNameAsString() << ", kind: " << RD->getKindName() << ", at: " << loc(BL) << ", to: " << loc(EL) << "\n";
-      // 
-      // // scan pass the tag kind token
-      // tok::TokenKind TKK = tok::kw_class;
-      // switch (TK) {
-      //   case TTK_Struct:  TKK = tok::kw_struct; break;
-      //   case TTK_Union:   TKK = tok::kw_union; break;
-      //   case TTK_Class:   TKK = tok::kw_class; break;
-      //   case TTK_Enum:    TKK = tok::kw_enum; break;
-      // }
-      // auto BLE = sema->getPreprocessor().getLocForEndOfToken(BL);
-      // 
-      // // auto NBL = Lexer::findLocationAfterToken(BL, tok::identifier, sema->getSourceManager(), sema->getLangOpts(), true);
-      // auto NBL = Lexer::GetBeginningOfToken(BLE, sema->getSourceManager(), sema->getLangOpts());
-      // llvm::errs() << indent() << "name at: " << loc(NBL) << "\n";
-      
-      // handle inheritance
-      if (auto CRD = dyn_cast<CXXRecordDecl>(RD)) {
+        // rename
+        if (QTNS == fromTypeQualifiedName) {
+          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+        }
+      }
+
+      if (auto CRD = dyn_cast<CXXRecordDecl>(TD)) {
         // can't call bases_begin() if there's no definition
         if (CRD->hasDefinition()) {        
           for (auto BI = CRD->bases_begin(), BE = CRD->bases_end(); BI != BE; ++BI) {
@@ -150,28 +140,6 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
           }
         }
       } // if a CXXRecordDecl
-
-    }
-    else if (auto TD = dyn_cast<TagDecl>(*I)) {
-      // TODO: Complete this and merge with above
-      
-      // remaining tag decls (enum)
-      // auto BL = TD->getLocStart();
-      // auto BLE = sema->getPreprocessor().getLocForEndOfToken(BL);      
-      // auto EL = TD->getLocEnd();
-      // 
-      // llvm::errs() << indent() << TD->getQualifiedNameAsString() << ", kind: " << TD->getKindName() << ", at: " << loc(BL) << ", to: " << loc(EL) << "\n";
-      // auto NBL1 = Lexer::findLocationAfterToken(BL, tok::kw_enum, sema->getSourceManager(), sema->getLangOpts(), true);
-      // auto NBL2 = Lexer::findLocationAfterToken(BL, tok::identifier, sema->getSourceManager(), sema->getLangOpts(), true);
-      // auto NBL3 = Lexer::GetBeginningOfToken(BLE, sema->getSourceManager(), sema->getLangOpts());
-      // auto NBL4 = Lexer::findLocationAfterToken(BLE, tok::identifier, sema->getSourceManager(), sema->getLangOpts(), true);
-      // llvm::errs() << indent() << "name at: " << loc(BLE) << "\n";      
-      // llvm::errs() << indent() << "name at: " << loc(NBL1) << "\n";      
-      // llvm::errs() << indent() << "name at: " << loc(NBL2) << "\n"; 
-      // llvm::errs() << indent() << "name at: " << loc(NBL3) << "\n"; 
-      // llvm::errs() << indent() << "name at: " << loc(NBL4) << "\n"; 
-      // 
-      // auto TND = TD->getTypedefNameForAnonDecl(); 
     }
     else if (auto D = dyn_cast<FunctionDecl>(*I)) {
       // if no type source info, it's a void f(void) function
@@ -180,7 +148,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         processTypeLoc(TSI->getTypeLoc());
       }
 
-      // TODO: Handle ctor initializers
+      // handle ctor initializers
       if (auto CD = dyn_cast<CXXConstructorDecl>(D)) {
         for (auto II = CD->init_begin(), IE = CD->init_end(); II != IE; ++II) {
           auto X = (*II)->getInit();
@@ -190,12 +158,11 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         }
       }
       
-      
       for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
         
         // need to take care of params with no name
         // (param with name is handled by the function's type loc)
-        // TODO: Why?        
+        // TODO: understand why it works?
         
         auto PN = (*PI)->getName();
         if (PN.empty()) {
@@ -211,7 +178,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         }
       }
       
-      // Handle body
+      // handle body
       if (D->hasBody()) {
         processStmt(D->getBody());
       }
@@ -227,12 +194,22 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
     }
     else if (auto D = dyn_cast<TypedefDecl>(*I)) {
-      // TODO: See if it's the name that needs changing
-      
+      // typedef T n -- we want to see first if it's n that needs renaming
+      Preprocessor &P = sema->getPreprocessor();      
+      auto BL = D->getLocation();
+      if (BL.isValid()) {
+        auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
+        auto QTNS = D->getQualifiedNameAsString();
+
+        if (QTNS == fromTypeQualifiedName) {
+          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+        }
+      }
+
+      // then we handle the case of T
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
     }
     else {
-      // TODO: handle remaining tag decls (enum etc.)
       // TODO: handle Objective-C types
     }
 
@@ -278,6 +255,11 @@ void TypeRenameTransform::processStmt(Stmt *S)
 }
 
 void TypeRenameTransform::processTypeLoc(TypeLoc TL)
+{
+  processTypeLoc(TL, TL);
+}
+
+void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
 {
   if (TL.isNull()) {
     return;
@@ -329,10 +311,42 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
       }
       break;
     }
+    
+    // non-leaf types
+    case TypeLoc::TypeLocClass::Typedef:
+    // all leaf types
+    case TypeLoc::TypeLocClass::Enum:    
+    {
+      // Typedef/Enum needs special handling because the leaf node
+      // in not a full name (i.e. no namespace info)
+      // so we have to do this
+      TypeLoc ITL = headTL;
+      auto ITLQT = headTL.getType();
+      do {
+        llvm::errs() << indent()
+          << "TypeLoc"
+          << ", typeLocClass: " << typeLocClassName(ITL.getTypeLocClass())
+          << "\n" << indent() << "qualType as str: " << ITLQT.getAsString()
+          << "\n" << indent() << "beginLoc: " << loc(ITL.getBeginLoc())
+          << "\n";
+        
+        if (ITLQT.getAsString() == fromTypeQualifiedName) {
+          Preprocessor &P = sema->getPreprocessor();
+          auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
+          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
 
-    // all leaf types (see clang/AST/TypeNodes.def)
+          llvm::errs() << "renamed: " << loc(BL) << "\n";
+          break;          
+        }
+        ITL = ITL.getNextTypeLoc();
+      } while (ITL != TL && !ITL.isNull());
+      
+      break; // case
+    }
+    
+    // leaf types
     // TODO: verify correctness, need test cases for each    
-    case TypeLoc::TypeLocClass::Enum:
+    // TODO: Check if Builtin works
     case TypeLoc::TypeLocClass::Builtin:
     case TypeLoc::TypeLocClass::Record:
     case TypeLoc::TypeLocClass::InjectedClassName:
@@ -342,12 +356,11 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
       // TODO: Correct way of comparing type?
       if (QT.getAsString() == fromTypeQualifiedName) {
         
-        
         Preprocessor &P = sema->getPreprocessor();
         auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
         rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
 
-        // llvm::errs() << "renamed: " << loc(BL) << "\n";
+        llvm::errs() << "renamed: " << loc(BL) << "\n";
       }
       break;
     }
@@ -357,7 +370,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
       break;
   }
   
-  processTypeLoc(TL.getNextTypeLoc());
+  processTypeLoc(TL.getNextTypeLoc(), headTL);
 
   popIndent();
 }
