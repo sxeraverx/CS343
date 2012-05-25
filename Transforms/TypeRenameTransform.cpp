@@ -109,16 +109,33 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
   pushIndent();
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
-    // llvm::errs() << indent() << (*I)->getDeclKindName() << ", at: " << loc((*I)->getLocStart()) << "\n";
-    
-    if (auto D = dyn_cast<VarDecl>(*I)) {
+    if (auto RD = dyn_cast<RecordDecl>(*I)) {      
+      // TODO: Rename record      
+      // TODO: Handle ctor initializers
+    }
+    else if (auto D = dyn_cast<FunctionDecl>(*I)) {
+      // if no type source info, it's a void f(void) function
+      auto TSI = D->getTypeSourceInfo();
+      if (TSI) {      
+        processTypeLoc(TSI->getTypeLoc());
+      }
+      
+      // TODO: Handle defaulh param
+    }
+    else if (auto D = dyn_cast<VarDecl>(*I)) {
+      processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
+      
+      // TODO: Handle init expression
+    }
+    else if (auto D = dyn_cast<FieldDecl>(*I)) {
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
     }
     else if (auto D = dyn_cast<TypedefDecl>(*I)) {
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
-    }    
-    else if (auto innerDC = dyn_cast<DeclContext>(*I)) {
-      // descend into the next level (namespace, etc.)
+    }
+
+    // descend into the next level (namespace, etc.)    
+    if (auto innerDC = dyn_cast<DeclContext>(*I)) {
       processDeclContext(innerDC);
     }
   }
