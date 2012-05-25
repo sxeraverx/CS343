@@ -99,10 +99,12 @@ void TypeRenameTransform::HandleTranslationUnit(ASTContext &C)
   writeOutput();
 }
 
+
+// TODO: A special case for top-level decl context
+// (because we can quickly skip system/refactored nodes there)
 void TypeRenameTransform::processDeclContext(DeclContext *DC)
 {  
-  // TODO: ignore system headers
-  
+  // TODO: ignore system headers (/usr, /opt, /System and /Library)
   // TODO: Skip globally touched locations
   //
   // if a.cpp and b.cpp both include c.h, then once a.cpp is processed,
@@ -112,8 +114,64 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
   pushIndent();
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
-    if (auto RD = dyn_cast<RecordDecl>(*I)) {      
-      // TODO: Rename record      
+    if (auto RD = dyn_cast<RecordDecl>(*I)) {
+      
+      // This turns out to be a non-trivial task to obtain the name
+      
+      // TODO: Rename record
+
+      // auto BL = RD->getLocStart();
+      // auto EL = RD->getLocEnd();
+      // auto TK = RD->getTagKind();
+      // llvm::errs() << indent() << RD->getQualifiedNameAsString() << ", kind: " << RD->getKindName() << ", at: " << loc(BL) << ", to: " << loc(EL) << "\n";
+      // 
+      // // scan pass the tag kind token
+      // tok::TokenKind TKK = tok::kw_class;
+      // switch (TK) {
+      //   case TTK_Struct:  TKK = tok::kw_struct; break;
+      //   case TTK_Union:   TKK = tok::kw_union; break;
+      //   case TTK_Class:   TKK = tok::kw_class; break;
+      //   case TTK_Enum:    TKK = tok::kw_enum; break;
+      // }
+      // auto BLE = sema->getPreprocessor().getLocForEndOfToken(BL);
+      // 
+      // // auto NBL = Lexer::findLocationAfterToken(BL, tok::identifier, sema->getSourceManager(), sema->getLangOpts(), true);
+      // auto NBL = Lexer::GetBeginningOfToken(BLE, sema->getSourceManager(), sema->getLangOpts());
+      // llvm::errs() << indent() << "name at: " << loc(NBL) << "\n";
+      
+      // handle inheritance
+      if (auto CRD = dyn_cast<CXXRecordDecl>(RD)) {
+        // can't call bases_begin() if there's no definition
+        if (CRD->hasDefinition()) {        
+          for (auto BI = CRD->bases_begin(), BE = CRD->bases_end(); BI != BE; ++BI) {
+            if (auto TSI = BI->getTypeSourceInfo()) {
+              processTypeLoc(TSI->getTypeLoc());
+            }
+          }
+        }
+      } // if a CXXRecordDecl
+
+    }
+    else if (auto TD = dyn_cast<TagDecl>(*I)) {
+      // TODO: Complete this and merge with above
+      
+      // remaining tag decls (enum)
+      // auto BL = TD->getLocStart();
+      // auto BLE = sema->getPreprocessor().getLocForEndOfToken(BL);      
+      // auto EL = TD->getLocEnd();
+      // 
+      // llvm::errs() << indent() << TD->getQualifiedNameAsString() << ", kind: " << TD->getKindName() << ", at: " << loc(BL) << ", to: " << loc(EL) << "\n";
+      // auto NBL1 = Lexer::findLocationAfterToken(BL, tok::kw_enum, sema->getSourceManager(), sema->getLangOpts(), true);
+      // auto NBL2 = Lexer::findLocationAfterToken(BL, tok::identifier, sema->getSourceManager(), sema->getLangOpts(), true);
+      // auto NBL3 = Lexer::GetBeginningOfToken(BLE, sema->getSourceManager(), sema->getLangOpts());
+      // auto NBL4 = Lexer::findLocationAfterToken(BLE, tok::identifier, sema->getSourceManager(), sema->getLangOpts(), true);
+      // llvm::errs() << indent() << "name at: " << loc(BLE) << "\n";      
+      // llvm::errs() << indent() << "name at: " << loc(NBL1) << "\n";      
+      // llvm::errs() << indent() << "name at: " << loc(NBL2) << "\n"; 
+      // llvm::errs() << indent() << "name at: " << loc(NBL3) << "\n"; 
+      // llvm::errs() << indent() << "name at: " << loc(NBL4) << "\n"; 
+      // 
+      // auto TND = TD->getTypedefNameForAnonDecl(); 
     }
     else if (auto D = dyn_cast<FunctionDecl>(*I)) {
       // if no type source info, it's a void f(void) function
@@ -173,6 +231,10 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
     }
+    else {
+      // TODO: handle remaining tag decls (enum etc.)
+      // TODO: handle Objective-C types
+    }
 
     // descend into the next level (namespace, etc.)    
     if (auto innerDC = dyn_cast<DeclContext>(*I)) {
@@ -189,12 +251,12 @@ void TypeRenameTransform::processStmt(Stmt *S)
   }
   
   pushIndent();
-  llvm::errs() << indent() << "Stmt: " << S->getStmtClassName() << ", at: "<< loc(S->getLocStart()) << "\n";
+  // llvm::errs() << indent() << "Stmt: " << S->getStmtClassName() << ", at: "<< loc(S->getLocStart()) << "\n";
   
   if (auto CE = dyn_cast<CallExpr>(S)) {
     auto D = CE->getCalleeDecl();
     if (D) {
-      llvm::errs() << indent() << D->getDeclKindName() << "\n";
+      // llvm::errs() << indent() << D->getDeclKindName() << "\n";
     }
   }
   else if (auto NE = dyn_cast<CXXNewExpr>(S)) {
@@ -203,7 +265,10 @@ void TypeRenameTransform::processStmt(Stmt *S)
   else if (auto NE = dyn_cast<ExplicitCastExpr>(S)) {
     processTypeLoc(NE->getTypeInfoAsWritten()->getTypeLoc());  
   }
-
+  else {
+    // TODO: Fill in other Stmt/Expr that has type info
+    // TODO: Verify correctness and furnish test cases
+  }
   
   for (auto I = S->child_begin(), E = S->child_end(); I != E; ++I) {
     processStmt(*I);
@@ -265,7 +330,14 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
       break;
     }
 
+    // all leaf types (see clang/AST/TypeNodes.def)
+    // TODO: verify correctness, need test cases for each    
+    case TypeLoc::TypeLocClass::Enum:
+    case TypeLoc::TypeLocClass::Builtin:
     case TypeLoc::TypeLocClass::Record:
+    case TypeLoc::TypeLocClass::InjectedClassName:
+    case TypeLoc::TypeLocClass::ObjCInterface:
+    case TypeLoc::TypeLocClass::TemplateTypeParm:
     {
       // TODO: Correct way of comparing type?
       if (QT.getAsString() == fromTypeQualifiedName) {
@@ -275,7 +347,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
         auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
         rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
 
-        llvm::errs() << "renamed: " << loc(BL) << "\n";
+        // llvm::errs() << "renamed: " << loc(BL) << "\n";
       }
       break;
     }
