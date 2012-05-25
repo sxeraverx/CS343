@@ -1,7 +1,12 @@
 #include "foo.h"
+#include <vector>
+#include <map>
 
 typedef A::Foo AF;
 typedef A::Foo* AFP;
+
+#define Poo A::Foo
+#define Blah(x) A::x
 
 int main()
 {
@@ -15,7 +20,7 @@ int main()
   const A::Foo *d = b;
   A::Foo &e = a;
 
-  // A::Foo &&er = a;
+  // A::Foo &&er = A::Foo();
 
   A::Foo *f = new A::Foo;
   a = A::Foo(5);
@@ -23,6 +28,16 @@ int main()
   AF g;
   AF* h = &g;
   AFP i = h;
+  
+  std::vector<A::Foo> j;
+  std::pair<int, A::Foo> k;
+  std::pair<A::Foo, float> l;
+  std::pair<A::Foo, A::Foo> m;
+  std::pair<A::Foo, std::pair<int, A::Foo> > n;
+  
+  Blah(Foo) o;
+  Poo p;
+  Poo* q;  
 }
 
 using namespace A;
@@ -35,5 +50,10 @@ void test()
   const Foo *td = tb;
   Foo &te = ta;
   Foo *tf = new Foo;
+  std::vector<Foo> j;
+  std::pair<int, Foo> k;
+  std::pair<Foo, float> l;
+  std::pair<Foo, Foo> m;
+  std::pair<Foo, std::pair<int, Foo> > n;  
   ta = Foo(5);  
 }

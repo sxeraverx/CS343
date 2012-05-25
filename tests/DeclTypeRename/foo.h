@@ -1,4 +1,4 @@
-// #include <string>
+#include <string>
 
 namespace A {
   class Foo {
@@ -9,4 +9,3 @@ namespace A {
     Foo(int px) : x(px) {}
   };  
 };
-

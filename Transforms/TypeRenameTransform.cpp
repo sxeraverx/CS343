@@ -19,9 +19,8 @@ protected:
   std::string fromTypeQualifiedName;
   std::string toTypeName;
 
-  void processDeclContext(DeclContext *DC);
+  void processDeclContext(DeclContext *DC);  
   void processTypeLoc(TypeLoc TL);
-  void processVarDecl(VarDecl *V);
   void writeOutput();
   
   // TODO: Move these to a utility
@@ -47,6 +46,7 @@ private:
     return sst.str();
   }
   
+  // a quick way to get the whole TypeLocClass tree
   std::string typeLocClassName(TypeLoc::TypeLocClass C) {
     std::string src;
     llvm::raw_string_ostream sst(src);
@@ -106,15 +106,23 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
   // we cas skip any location that is not in b.cpp
   //
 
-  for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {    
-    if(auto D = dyn_cast<VarDecl>(*I)) {
-      processVarDecl(D);
+  pushIndent();
+  
+  for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
+    // llvm::errs() << indent() << (*I)->getDeclKindName() << ", at: " << loc((*I)->getLocStart()) << "\n";
+    
+    if (auto D = dyn_cast<VarDecl>(*I)) {
+      processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
     }
+    else if (auto D = dyn_cast<TypedefDecl>(*I)) {
+      processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
+    }    
     else if (auto innerDC = dyn_cast<DeclContext>(*I)) {
       // descend into the next level (namespace, etc.)
       processDeclContext(innerDC);
     }
   }
+  popIndent();
 }
 
 void TypeRenameTransform::processTypeLoc(TypeLoc TL)
@@ -125,10 +133,14 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   
   auto BL = TL.getBeginLoc();
   
+  // TODO: ignore system headers
+  
   // is a result from macro expansion? sorry...
   if (BL.isMacroID()) {
     
-    // TODO: add error diagnostics
+    // TODO: emit error diagnostics
+    
+    // llvm::errs() << "Cannot rename type from macro expansion at: " << loc(BL) << "\n";
     return;
   }
 
@@ -162,10 +174,13 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
     {
       // TODO: Correct way of comparing type?
       if (QT.getAsString() == fromTypeQualifiedName) {
-        llvm::errs() << indent() << "renaming " << loc(BL) << "\n";
+        
+        
         Preprocessor &P = sema->getPreprocessor();
         auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
         rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
+
+        llvm::errs() << "renamed: " << loc(BL) << "\n";
       }
       break;
     }
@@ -178,12 +193,6 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   processTypeLoc(TL.getNextTypeLoc());
 
   popIndent();
-}
-
-void TypeRenameTransform::processVarDecl(VarDecl *V)
-{
-  llvm::errs() << indent() << "VarDecl, type: " << V->getType().getAsString() << ", name: " << V->getQualifiedNameAsString() << "\n";
-  processTypeLoc(V->getTypeSourceInfo()->getTypeLoc());
 }
 
 void TypeRenameTransform::writeOutput()
