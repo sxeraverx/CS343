@@ -101,6 +101,8 @@ void TypeRenameTransform::HandleTranslationUnit(ASTContext &C)
 
 void TypeRenameTransform::processDeclContext(DeclContext *DC)
 {  
+  // TODO: ignore system headers
+  
   // TODO: Skip globally touched locations
   //
   // if a.cpp and b.cpp both include c.h, then once a.cpp is processed,
@@ -121,6 +123,15 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       }
 
       // TODO: Handle ctor initializers
+      if (auto CD = dyn_cast<CXXConstructorDecl>(D)) {
+        for (auto II = CD->init_begin(), IE = CD->init_end(); II != IE; ++II) {
+          auto X = (*II)->getInit();
+          if (X) {
+            processStmt(X);
+          }
+        }
+      }
+      
       
       for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
         
@@ -153,13 +164,13 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       if (D->hasInit()) {
         processStmt(D->getInit());
       }
-      
-      // TODO: Handle init expression
     }
     else if (auto D = dyn_cast<FieldDecl>(*I)) {
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
     }
     else if (auto D = dyn_cast<TypedefDecl>(*I)) {
+      // TODO: See if it's the name that needs changing
+      
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
     }
 
