@@ -164,7 +164,15 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
         // iterate through the args
 
         for (unsigned I = 0, E = TSTL->getNumArgs(); I != E; ++I) {
-          processTypeLoc(TSTL->getArgLoc(I).getTypeSourceInfo()->getTypeLoc());
+          
+          // need to see if the template argument is also a type
+          // (we skip things like Foo<1> )
+          auto AL = TSTL->getArgLoc(I);
+          auto A = AL.getArgument();
+          if (A.getKind() != TemplateArgument::ArgKind::Type) {
+            continue;
+          }
+          processTypeLoc(AL.getTypeSourceInfo()->getTypeLoc());
         }
       }
       break;
