@@ -20,6 +20,7 @@ protected:
   std::string toTypeName;
 
   void processDeclContext(DeclContext *DC);  
+  void processStmt(Stmt *S);
   void processTypeLoc(TypeLoc TL);
   void writeOutput();
   
@@ -111,7 +112,6 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
     if (auto RD = dyn_cast<RecordDecl>(*I)) {      
       // TODO: Rename record      
-      // TODO: Handle ctor initializers
     }
     else if (auto D = dyn_cast<FunctionDecl>(*I)) {
       // if no type source info, it's a void f(void) function
@@ -119,11 +119,40 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       if (TSI) {      
         processTypeLoc(TSI->getTypeLoc());
       }
+
+      // TODO: Handle ctor initializers
       
-      // TODO: Handle defaulh param
+      for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
+        
+        // need to take care of params with no name
+        // (param with name is handled by the function's type loc)
+        // TODO: Why?        
+        
+        auto PN = (*PI)->getName();
+        if (PN.empty()) {
+          auto PTSI = (*PI)->getTypeSourceInfo();
+          if (PTSI) {
+            processTypeLoc(PTSI->getTypeLoc());
+          }
+        }
+        
+        // then the default vars
+        if ((*PI)->hasInit()) {
+          processStmt((*PI)->getInit());
+        }
+      }
+      
+      // Handle body
+      if (D->hasBody()) {
+        processStmt(D->getBody());
+      }
     }
     else if (auto D = dyn_cast<VarDecl>(*I)) {
       processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
+      
+      if (D->hasInit()) {
+        processStmt(D->getInit());
+      }
       
       // TODO: Handle init expression
     }
@@ -139,6 +168,36 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       processDeclContext(innerDC);
     }
   }
+  popIndent();
+}
+
+void TypeRenameTransform::processStmt(Stmt *S)
+{
+  if (!S) {
+    return;
+  }
+  
+  pushIndent();
+  llvm::errs() << indent() << "Stmt: " << S->getStmtClassName() << ", at: "<< loc(S->getLocStart()) << "\n";
+  
+  if (auto CE = dyn_cast<CallExpr>(S)) {
+    auto D = CE->getCalleeDecl();
+    if (D) {
+      llvm::errs() << indent() << D->getDeclKindName() << "\n";
+    }
+  }
+  else if (auto NE = dyn_cast<CXXNewExpr>(S)) {
+    processTypeLoc(NE->getAllocatedTypeSourceInfo()->getTypeLoc());  
+  }
+  else if (auto NE = dyn_cast<ExplicitCastExpr>(S)) {
+    processTypeLoc(NE->getTypeInfoAsWritten()->getTypeLoc());  
+  }
+
+  
+  for (auto I = S->child_begin(), E = S->child_end(); I != E; ++I) {
+    processStmt(*I);
+  }
+  
   popIndent();
 }
 
