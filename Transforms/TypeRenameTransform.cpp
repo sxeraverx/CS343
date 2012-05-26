@@ -125,8 +125,11 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
           // TODO: emit error
         }
         else {
-          auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
-          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+          auto BLE = P.getLocForEndOfToken(BL);
+          if (BLE.isValid()) {
+            auto EL = BLE.getLocWithOffset(-1);
+            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+          }
         }
       }
 
@@ -158,8 +161,11 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
             // TODO: emit error
           }
           else {
-            auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
-            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+            auto BLE = P.getLocForEndOfToken(BL); 
+            if (BLE.isValid()) {
+              auto EL = BLE.getLocWithOffset(-1);
+              rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+            }
           }
         }
         
@@ -186,20 +192,22 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
 
 
           // TODO: Find the right way to do this -- consider this a hack
+
+          if (EL.isValid()) {
+            // EL is 1 char after the dtor name ~Foo
+            SourceLocation NE = EL.getLocWithOffset(-1);
           
-          // EL is 1 char after the dtor name ~Foo
-          SourceLocation NE = EL.getLocWithOffset(-1);
+            // BL is EL - len(name) char, but since getNameAsString()
+            // returns the string with the ~ prefix, we just use that
+            SourceLocation NB =
+              EL.getLocWithOffset(- DD->getNameAsString().size());
           
-          // BL is EL - len(name) char, but since getNameAsString()
-          // returns the string with the ~ prefix, we just use that
-          SourceLocation NB =
-            EL.getLocWithOffset(- DD->getNameAsString().size());
-          
-          if (NB.isMacroID()) {
-            // TODO: emit error
-          }
-          else {
-            rewriter.ReplaceText(SourceRange(NB, NE), toTypeName);        
+            if (NB.isMacroID()) {
+              // TODO: emit error
+            }
+            else {
+              rewriter.ReplaceText(SourceRange(NB, NE), toTypeName);        
+            }
           }
         }
       }
@@ -250,15 +258,19 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       auto BL = D->getLocation();
       
       if (BL.isValid()) {
-        auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
-        auto QTNS = D->getQualifiedNameAsString();
+        auto BLE = P.getLocForEndOfToken(BL); 
+        
+        if (BLE.isValid()) {        
+          auto EL = BLE.getLocWithOffset(-1);
+          auto QTNS = D->getQualifiedNameAsString();
 
-        if (QTNS == fromTypeQualifiedName) {
-          if (BL.isMacroID()) {
-            // TODO: emit error
-          }
-          else {
-            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
+          if (QTNS == fromTypeQualifiedName) {
+            if (BL.isMacroID()) {
+              // TODO: emit error
+            }
+            else {
+              rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
+            }
           }
         }
       }
@@ -268,9 +280,41 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         processTypeLoc(TSI->getTypeLoc());
       }
     }
-    else {
-      // TODO: handle Objective-C types
+    else if (auto D = dyn_cast<ObjCMethodDecl>(*I)) {
+      // if no type source info, it's a void f(void) function
+      auto TSI = D->getResultTypeSourceInfo();
+      if (TSI) {      
+        processTypeLoc(TSI->getTypeLoc());
+      }
+
+      for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {        
+        // need to take care of params with no name
+        // (param with name is handled by the function's type loc)
+        // TODO: understand why it works?
+        
+        auto PN = (*PI)->getName();
+        if (PN.empty()) {
+          auto PTSI = (*PI)->getTypeSourceInfo();
+          if (PTSI) {
+            processTypeLoc(PTSI->getTypeLoc());
+          }
+        }
+      }
+      
+      // handle body
+      auto B = D->getBody();
+      if (B) {
+        processStmt(B);
+      }
     }
+    else if (auto D = dyn_cast<ObjCPropertyDecl>(*I)) {
+      if (auto TSI = D->getTypeSourceInfo()) {
+        processTypeLoc(TSI->getTypeLoc());
+      }
+    }
+    
+    // TODO: Handle ObjC interface/impl, inheritance, protocol
+    // TODO: Whether we should support category rename?
 
     // descend into the next level (namespace, etc.)    
     if (auto innerDC = dyn_cast<DeclContext>(*I)) {
@@ -302,6 +346,8 @@ void TypeRenameTransform::processStmt(Stmt *S)
     processTypeLoc(NE->getTypeInfoAsWritten()->getTypeLoc());  
   }
   else {
+    // TODO: Objective-C method call
+    // TODO: Objective-C @encode, @protocol etc.
     // TODO: Fill in other Stmt/Expr that has type info
     // TODO: Verify correctness and furnish test cases
   }
@@ -394,11 +440,14 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
         
         if (ITLQT.getAsString() == fromTypeQualifiedName) {
           Preprocessor &P = sema->getPreprocessor();
-          auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
-          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
+          auto BLE = P.getLocForEndOfToken(BL);
+          if (BLE.isValid()) {
+            auto EL = BLE.getLocWithOffset(-1);
+            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
 
-          // llvm::errs() << "renamed: " << loc(BL) << "\n";
-          break;          
+            // llvm::errs() << "renamed: " << loc(BL) << "\n";
+            break; // do
+          }
         }
         ITL = ITL.getNextTypeLoc();
       } while (ITL != TL && !ITL.isNull());
@@ -419,10 +468,13 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
       if (QT.getAsString() == fromTypeQualifiedName) {
         
         Preprocessor &P = sema->getPreprocessor();
-        auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
-        rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
+        auto BLE = P.getLocForEndOfToken(BL);
+        if (BLE.isValid()) {
+          auto EL = BLE.getLocWithOffset(-1);
+          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
 
-        // llvm::errs() << "renamed: " << loc(BL) << "\n";
+          // llvm::errs() << "renamed: " << loc(BL) << "\n";
+        }
       }
       break;
     }
