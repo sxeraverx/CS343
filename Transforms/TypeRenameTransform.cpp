@@ -173,8 +173,35 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       
       // dtor
       if (auto DD = dyn_cast<CXXDestructorDecl>(D)) {
-        // TODO: Need the location info for "~ Foo"
-        // (getLocation() only gives the location for ~)
+        // if parent matches
+        auto BL = DD->getLocation();        
+        if (BL.isValid() && tagNameMatches(DD->getParent())) {
+        
+          // need to use raw_identifier because Lexer::findLocationAfterToken
+          // performs a raw lexing
+          SourceLocation EL =
+            Lexer::findLocationAfterToken(BL, tok::raw_identifier,
+                                          sema->getSourceManager(),
+                                          sema->getLangOpts(), true);
+
+
+          // TODO: Find the right way to do this -- consider this a hack
+          
+          // EL is 1 char after the dtor name ~Foo
+          SourceLocation NE = EL.getLocWithOffset(-1);
+          
+          // BL is EL - len(name) char, but since getNameAsString()
+          // returns the string with the ~ prefix, we just use that
+          SourceLocation NB =
+            EL.getLocWithOffset(- DD->getNameAsString().size());
+          
+          if (NB.isMacroID()) {
+            // TODO: emit error
+          }
+          else {
+            rewriter.ReplaceText(SourceRange(NB, NE), toTypeName);        
+          }
+        }
       }
       
       
