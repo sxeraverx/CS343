@@ -23,6 +23,7 @@ protected:
   void processStmt(Stmt *S);
   void processTypeLoc(TypeLoc TL);
   void processTypeLoc(TypeLoc TL, TypeLoc &headTL);
+  bool tagNameMatches(TagDecl *T);
   void writeOutput();
   
   // TODO: Move these to a utility
@@ -100,7 +101,6 @@ void TypeRenameTransform::HandleTranslationUnit(ASTContext &C)
   writeOutput();
 }
 
-
 // TODO: A special case for top-level decl context
 // (because we can quickly skip system/refactored nodes there)
 void TypeRenameTransform::processDeclContext(DeclContext *DC)
@@ -120,15 +120,12 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       Preprocessor &P = sema->getPreprocessor();
       auto BL = TD->getLocation();
       
-      if (BL.isMacroID()) {
-        // TODO: emit error
-      }
-      else if (BL.isValid()) {    
-        auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
-        auto QTNS = TD->getQualifiedNameAsString();
-
-        // rename
-        if (QTNS == fromTypeQualifiedName) {
+      if (BL.isValid() && tagNameMatches(TD)) {    
+        if (BL.isMacroID()) {
+          // TODO: emit error
+        }
+        else {
+          auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
           rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
         }
       }
@@ -151,8 +148,21 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         processTypeLoc(TSI->getTypeLoc());
       }
 
-      // handle ctor initializers
+      // handle ctor name initializers
       if (auto CD = dyn_cast<CXXConstructorDecl>(D)) {
+        auto BL = CD->getLocation();
+
+        if (BL.isValid() && tagNameMatches(CD->getParent())) {
+          Preprocessor &P = sema->getPreprocessor();
+          if (BL.isMacroID()) {
+            // TODO: emit error
+          }
+          else {
+            auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
+            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+          }
+        }
+        
         for (auto II = CD->init_begin(), IE = CD->init_end(); II != IE; ++II) {
           auto X = (*II)->getInit();
           if (X) {
@@ -160,6 +170,13 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
           }
         }
       }
+      
+      // dtor
+      if (auto DD = dyn_cast<CXXDestructorDecl>(D)) {
+        // TODO: Need the location info for "~ Foo"
+        // (getLocation() only gives the location for ~)
+      }
+      
       
       for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
         
@@ -204,15 +221,18 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       // typedef T n -- we want to see first if it's n that needs renaming
       Preprocessor &P = sema->getPreprocessor();      
       auto BL = D->getLocation();
-      if (BL.isMacroID()) {
-        // TODO: emit error
-      }
-      else if (BL.isValid()) {
+      
+      if (BL.isValid()) {
         auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
         auto QTNS = D->getQualifiedNameAsString();
 
         if (QTNS == fromTypeQualifiedName) {
-          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
+          if (BL.isMacroID()) {
+            // TODO: emit error
+          }
+          else {
+            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
+          }
         }
       }
 
@@ -338,19 +358,19 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
       TypeLoc ITL = headTL;
       auto ITLQT = headTL.getType();
       do {
-        llvm::errs() << indent()
-          << "TypeLoc"
-          << ", typeLocClass: " << typeLocClassName(ITL.getTypeLocClass())
-          << "\n" << indent() << "qualType as str: " << ITLQT.getAsString()
-          << "\n" << indent() << "beginLoc: " << loc(ITL.getBeginLoc())
-          << "\n";
+        // llvm::errs() << indent()
+        //   << "TypeLoc"
+        //   << ", typeLocClass: " << typeLocClassName(ITL.getTypeLocClass())
+        //   << "\n" << indent() << "qualType as str: " << ITLQT.getAsString()
+        //   << "\n" << indent() << "beginLoc: " << loc(ITL.getBeginLoc())
+        //   << "\n";
         
         if (ITLQT.getAsString() == fromTypeQualifiedName) {
           Preprocessor &P = sema->getPreprocessor();
           auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
           rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
 
-          llvm::errs() << "renamed: " << loc(BL) << "\n";
+          // llvm::errs() << "renamed: " << loc(BL) << "\n";
           break;          
         }
         ITL = ITL.getNextTypeLoc();
@@ -375,7 +395,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
         auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
         rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
 
-        llvm::errs() << "renamed: " << loc(BL) << "\n";
+        // llvm::errs() << "renamed: " << loc(BL) << "\n";
       }
       break;
     }
@@ -388,6 +408,20 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
   processTypeLoc(TL.getNextTypeLoc(), headTL);
 
   popIndent();
+}
+
+bool TypeRenameTransform::tagNameMatches(TagDecl *T)
+{
+  auto BL = T->getLocation();
+  if (!BL.isValid()) {
+    return false;
+  }
+
+  auto QTNS = T->getQualifiedNameAsString();
+  std::string fullName = T->getKindName();
+  fullName += " ";
+  fullName += QTNS;
+  return fullName == fromTypeQualifiedName;
 }
 
 void TypeRenameTransform::writeOutput()
