@@ -2,7 +2,8 @@
 
 namespace A {
   class X {
-    
+  public:
+    virtual ~X();
   };
   
   class Foo : public X {
@@ -11,6 +12,11 @@ namespace A {
   public:
     Foo() : x(0) {}
     Foo(int px) : x(px) {}
+    
+    virtual ~  Foo() {
+      
+      
+    }
     
     Foo getZeroFoo() {
       return Foo(0);

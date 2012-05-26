@@ -18,6 +18,8 @@ namespace A {
   public:
     Foo() : x(0) {}
     Foo(int px) : x(px) {}
+    
+     ~Foo ()  {  }
   };  
   
   class R : virtual public Foo {    

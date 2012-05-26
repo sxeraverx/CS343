@@ -2,6 +2,10 @@
 // #include <vector>
 // #include <map>
 
+namespace Blah {
+  typedef A::Foo Z;
+};
+
 typedef A::Foo AF;
 typedef A::Foo* AFP;
 
@@ -86,6 +90,9 @@ void test()
   class BBB {
     Foo b;
   };
+  
+  Blah::Z x;
+  A::Test y = B;
 }
 
 Foo foo3(Foo a, Foo* b, Foo& c, Foo***)
