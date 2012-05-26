@@ -120,7 +120,10 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       Preprocessor &P = sema->getPreprocessor();
       auto BL = TD->getLocation();
       
-      if (BL.isValid()) {    
+      if (BL.isMacroID()) {
+        // TODO: emit error
+      }
+      else if (BL.isValid()) {    
         auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
         auto QTNS = TD->getQualifiedNameAsString();
 
@@ -184,20 +187,27 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       }
     }
     else if (auto D = dyn_cast<VarDecl>(*I)) {
-      processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
+      if (auto TSI = D->getTypeSourceInfo()) {
+        processTypeLoc(TSI->getTypeLoc());
+      }
       
       if (D->hasInit()) {
         processStmt(D->getInit());
       }
     }
     else if (auto D = dyn_cast<FieldDecl>(*I)) {
-      processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
+      if (auto TSI = D->getTypeSourceInfo()) {
+        processTypeLoc(TSI->getTypeLoc());
+      }
     }
     else if (auto D = dyn_cast<TypedefDecl>(*I)) {
       // typedef T n -- we want to see first if it's n that needs renaming
       Preprocessor &P = sema->getPreprocessor();      
       auto BL = D->getLocation();
-      if (BL.isValid()) {
+      if (BL.isMacroID()) {
+        // TODO: emit error
+      }
+      else if (BL.isValid()) {
         auto EL = P.getLocForEndOfToken(BL).getLocWithOffset(-1);
         auto QTNS = D->getQualifiedNameAsString();
 
@@ -207,7 +217,9 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       }
 
       // then we handle the case of T
-      processTypeLoc(D->getTypeSourceInfo()->getTypeLoc());
+      if (auto TSI = D->getTypeSourceInfo()) {
+        processTypeLoc(TSI->getTypeLoc());
+      }
     }
     else {
       // TODO: handle Objective-C types
@@ -306,7 +318,10 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
           if (A.getKind() != TemplateArgument::ArgKind::Type) {
             continue;
           }
-          processTypeLoc(AL.getTypeSourceInfo()->getTypeLoc());
+          
+          if (auto TSI = AL.getTypeSourceInfo()) {
+            processTypeLoc(TSI->getTypeLoc());
+          }
         }
       }
       break;
