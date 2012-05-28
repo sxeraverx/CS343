@@ -323,11 +323,17 @@ void TypeRenameTransform::processStmt(Stmt *S)
       // llvm::errs() << indent() << D->getDeclKindName() << "\n";
     }
   }
-  else if (auto NE = dyn_cast<CXXNewExpr>(S)) {
-    processTypeLoc(NE->getAllocatedTypeSourceInfo()->getTypeLoc());  
+  else if (auto E = dyn_cast<CXXNewExpr>(S)) {
+    processTypeLoc(E->getAllocatedTypeSourceInfo()->getTypeLoc());  
   }
-  else if (auto NE = dyn_cast<ExplicitCastExpr>(S)) {
-    processTypeLoc(NE->getTypeInfoAsWritten()->getTypeLoc());  
+  else if (auto E = dyn_cast<ExplicitCastExpr>(S)) {
+    processTypeLoc(E->getTypeInfoAsWritten()->getTypeLoc());  
+  }
+  else if (auto E = dyn_cast<UnaryExprOrTypeTraitExpr>(S)) {
+    // sizeof etc.
+    if (E->isArgumentType()) {
+      processTypeLoc(E->getArgumentTypeInfo()->getTypeLoc());  
+    }
   }
   else {
     // TODO: Objective-C method call
@@ -365,12 +371,12 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   pushIndent();
   auto QT = TL.getType();
     
-  llvm::errs() << indent()
-    << "TypeLoc"
-    << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
-    << "\n" << indent() << "qualType as str: " << QT.getAsString()
-    << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
-    << "\n";
+  // llvm::errs() << indent()
+  //   << "TypeLoc"
+  //   << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
+  //   << "\n" << indent() << "qualType as str: " << QT.getAsString()
+  //   << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+  //   << "\n";
     
   switch(TL.getTypeLocClass()) {
     
