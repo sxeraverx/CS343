@@ -198,7 +198,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
           SourceLocation EL =
             Lexer::findLocationAfterToken(BL, tok::raw_identifier,
                                           sema->getSourceManager(),
-                                          sema->getLangOpts(), true);
+                                          sema->getLangOpts(), false);
 
 
           // TODO: Find the right way to do this -- consider this a hack
@@ -209,7 +209,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
             
             // "~Foo" has length of 4, we want -3 == pos of 'F'
             SourceLocation NB =
-              EL.getLocWithOffset(-DD->getNameAsString().size() + 1);
+              EL.getLocWithOffset(-(int)DD->getNameAsString().size() + 1);
 
             if (NB.isMacroID()) {
               // TODO: emit error
