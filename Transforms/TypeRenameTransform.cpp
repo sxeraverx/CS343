@@ -221,19 +221,11 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         }
       }
       
-      
+      // rename the params' types
       for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
-        
-        // need to take care of params with no name
-        // (param with name is handled by the function's type loc)
-        // TODO: understand why it works?
-        
-        auto PN = (*PI)->getName();
-        if (PN.empty()) {
-          auto PTSI = (*PI)->getTypeSourceInfo();
-          if (PTSI) {
-            processTypeLoc(PTSI->getTypeLoc());
-          }
+        auto PTSI = (*PI)->getTypeSourceInfo();
+        if (PTSI) {
+          processTypeLoc(PTSI->getTypeLoc());
         }
         
         // then the default vars
@@ -297,16 +289,9 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       }
 
       for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {        
-        // need to take care of params with no name
-        // (param with name is handled by the function's type loc)
-        // TODO: understand why it works?
-        
-        auto PN = (*PI)->getName();
-        if (PN.empty()) {
-          auto PTSI = (*PI)->getTypeSourceInfo();
-          if (PTSI) {
-            processTypeLoc(PTSI->getTypeLoc());
-          }
+        auto PTSI = (*PI)->getTypeSourceInfo();
+        if (PTSI) {
+          processTypeLoc(PTSI->getTypeLoc());
         }
       }
       
@@ -480,7 +465,6 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
       // skip if it's an anonymous type
       // read Clang`s definition (in RecordDecl) -- not exactly what you think
       // so we use the length of name
-      bool match = false;
       
       if (auto TT = dyn_cast<TagType>(TL.getTypePtr())) {
         auto TD = TT->getDecl();
@@ -493,15 +477,10 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
         if (TD->getLocation() == BL) {
           break; // bail out from the case          
         }
-        
-        match = TD->getQualifiedNameAsString() == fromTypeQualifiedName;
-      }
-      else {
-        match = QT.getAsString() == fromTypeQualifiedName;
       }
       
       // TODO: Correct way of comparing type?
-      if (match) {
+      if (QT.getAsString() == fromTypeQualifiedName) {
         
         Preprocessor &P = sema->getPreprocessor();
         auto BLE = P.getLocForEndOfToken(BL);
