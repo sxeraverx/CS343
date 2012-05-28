@@ -22,7 +22,6 @@ protected:
   void processDeclContext(DeclContext *DC);  
   void processStmt(Stmt *S);
   void processTypeLoc(TypeLoc TL);
-  void processTypeLoc(TypeLoc TL, TypeLoc &headTL);
   bool tagNameMatches(TagDecl *T);
   void writeOutput();
   
@@ -361,11 +360,6 @@ void TypeRenameTransform::processStmt(Stmt *S)
 
 void TypeRenameTransform::processTypeLoc(TypeLoc TL)
 {
-  processTypeLoc(TL, TL);
-}
-
-void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
-{
   if (TL.isNull()) {
     return;
   }
@@ -420,25 +414,14 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
       break;
     }
     
-    // non-leaf types
+    // typedef is tricky
     case TypeLoc::TypeLocClass::Typedef:
-    // all leaf types
-    case TypeLoc::TypeLocClass::Enum:    
     {
-      // Typedef/Enum needs special handling because the leaf node
-      // in not a full name (i.e. no namespace info)
-      // so we have to do this
-      TypeLoc ITL = headTL;
-      auto ITLQT = headTL.getType();
-      do {
-        // llvm::errs() << indent()
-        //   << "TypeLoc"
-        //   << ", typeLocClass: " << typeLocClassName(ITL.getTypeLocClass())
-        //   << "\n" << indent() << "qualType as str: " << ITLQT.getAsString()
-        //   << "\n" << indent() << "beginLoc: " << loc(ITL.getBeginLoc())
-        //   << "\n";
-        
-        if (ITLQT.getAsString() == fromTypeQualifiedName) {
+      auto T = TL.getTypePtr();
+      if (auto TDT = dyn_cast<TypedefType>(T)) {
+        auto TDD = TDT->getDecl();
+      
+        if (TDD->getQualifiedNameAsString() == fromTypeQualifiedName) {
           Preprocessor &P = sema->getPreprocessor();
           auto BLE = P.getLocForEndOfToken(BL);
           if (BLE.isValid()) {
@@ -449,8 +432,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
             break; // do
           }
         }
-        ITL = ITL.getNextTypeLoc();
-      } while (ITL != TL && !ITL.isNull());
+      }
       
       break; // case
     }
@@ -459,11 +441,28 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
     // TODO: verify correctness, need test cases for each    
     // TODO: Check if Builtin works
     case TypeLoc::TypeLocClass::Builtin:
+    case TypeLoc::TypeLocClass::Enum:    
     case TypeLoc::TypeLocClass::Record:
     case TypeLoc::TypeLocClass::InjectedClassName:
     case TypeLoc::TypeLocClass::ObjCInterface:
     case TypeLoc::TypeLocClass::TemplateTypeParm:
     {
+      // skip if it's an anonymous type
+      // read Clang`s definition (in RecordDecl) -- not exactly what you think
+      // so we use the length of name
+      if (auto TT = dyn_cast<TagType>(TL.getTypePtr())) {
+        auto TD = TT->getDecl();
+        if (TD->getNameAsString().size() == 0) {
+          break; // bail out from the case
+        }
+        
+        // also, if it's the same loc as the decl's, we must skip it
+        // (implying it has already been renamed by processDeclContext)
+        if (TD->getLocation() == BL) {
+          break; // bail out from the case          
+        }
+      }
+      
       // TODO: Correct way of comparing type?
       if (QT.getAsString() == fromTypeQualifiedName) {
         
@@ -484,7 +483,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, TypeLoc &headTL)
       break;
   }
   
-  processTypeLoc(TL.getNextTypeLoc(), headTL);
+  processTypeLoc(TL.getNextTypeLoc());
 
   popIndent();
 }
