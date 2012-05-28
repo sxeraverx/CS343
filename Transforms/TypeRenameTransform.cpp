@@ -29,7 +29,11 @@ protected:
 
   void processDeclContext(DeclContext *DC);  
   void processStmt(Stmt *S);
-  void processTypeLoc(TypeLoc TL);
+  
+  // forceRewriteMacro is needed to handle expressions like VAArgExpr
+  // TODO: be smart, if TL is not within a marco, it's do-able
+  void processTypeLoc(TypeLoc TL, bool forceRewriteMacro = false);
+  
   void processParmVarDecl(ParmVarDecl *P);
   bool tagNameMatches(TagDecl *T);
   void writeOutput();
@@ -329,6 +333,10 @@ void TypeRenameTransform::processStmt(Stmt *S)
   else if (auto E = dyn_cast<ExplicitCastExpr>(S)) {
     processTypeLoc(E->getTypeInfoAsWritten()->getTypeLoc());  
   }
+  else if (auto E = dyn_cast<VAArgExpr>(S)) {
+    // TODO: This will be a problem if the arg is also a macro expansion...
+    processTypeLoc(E->getWrittenTypeInfo()->getTypeLoc(), true);  
+  }
   else if (auto E = dyn_cast<UnaryExprOrTypeTraitExpr>(S)) {
     // sizeof etc.
     if (E->isArgumentType()) {
@@ -349,7 +357,7 @@ void TypeRenameTransform::processStmt(Stmt *S)
   popIndent();
 }
 
-void TypeRenameTransform::processTypeLoc(TypeLoc TL)
+void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
 {
   if (TL.isNull()) {
     return;
@@ -360,13 +368,16 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   // TODO: ignore system headers
   
   // is a result from macro expansion? sorry...
-  if (BL.isMacroID()) {
+  if (BL.isMacroID() && !forceRewriteMacro) {
     
     // TODO: emit error diagnostics
     
     // llvm::errs() << "Cannot rename type from macro expansion at: " << loc(BL) << "\n";
     return;
   }
+  
+  // TODO: Take care of spelling loc finesses
+  BL = sema->getSourceManager().getSpellingLoc(BL);
 
   pushIndent();
   auto QT = TL.getType();
@@ -392,7 +403,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
           auto NNS = NNSL.getNestedNameSpecifier();
           auto NNSK = NNS->getKind();
           if (NNSK == NestedNameSpecifier::TypeSpec || NNSK == NestedNameSpecifier::TypeSpecWithTemplate) {
-            processTypeLoc(NNSL.getTypeLoc());
+            processTypeLoc(NNSL.getTypeLoc(), forceRewriteMacro);
           }
           
           NNSL = NNSL.getPrefix();
@@ -430,7 +441,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
           }
           
           if (auto TSI = AL.getTypeSourceInfo()) {
-            processTypeLoc(TSI->getTypeLoc());
+            processTypeLoc(TSI->getTypeLoc(), forceRewriteMacro);
           }
         }
       }
@@ -503,8 +514,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
       break;
   }
   
-  processTypeLoc(TL.getNextTypeLoc());
-
+  processTypeLoc(TL.getNextTypeLoc(), forceRewriteMacro);
   popIndent();
 }
 
