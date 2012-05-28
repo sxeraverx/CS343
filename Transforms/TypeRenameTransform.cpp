@@ -7,6 +7,14 @@
 
 using namespace clang;
 
+// TODO: Instead of using string match, use a two-pass approach
+// pass 1: find the Decl that needs to be renamed
+// pass 2: use TypeLoc's type info to find if it's the original Decl
+// reason: need a way to handle in-function classes
+// (the reas name of those classes do not show up in the TypeLoc's
+// qualified name)
+// issue: what about forward-decl'd types (class A; A* b;) ? 
+
 class TypeRenameTransform : public Transform {
 public:
   TypeRenameTransform() : indentLevel(0) {}
@@ -115,6 +123,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
     if (auto TD = dyn_cast<TagDecl>(*I)) {
+      
       // handle tag decls (enum, struct, union, class)
       Preprocessor &P = sema->getPreprocessor();
       auto BL = TD->getLocation();
@@ -381,14 +390,36 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   pushIndent();
   auto QT = TL.getType();
     
-  llvm::errs() << indent()
-    << "TypeLoc"
-    << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
-    << "\n" << indent() << "qualType as str: " << QT.getAsString()
-    << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
-    << "\n";
+  // llvm::errs() << indent()
+  //   << "TypeLoc"
+  //   << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
+  //   << "\n" << indent() << "qualType as str: " << QT.getAsString()
+  //   << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+  //   << "\n";
     
   switch(TL.getTypeLocClass()) {
+    
+    // an elaborated type loc captures the "prefix" of a type
+    // for example, the elaborated type loc of "A::B::C" is A::B
+    // we need to know if A::B and A are types we are renaming
+    // (so that we can handle nested classes, in-class typedefs, etc.)
+    case TypeLoc::TypeLocClass::Elaborated:
+    {
+      if (auto ETL = dyn_cast<ElaboratedTypeLoc>(&TL)) {
+        auto NNSL = ETL->getQualifierLoc();
+        while (NNSL) {
+          auto NNS = NNSL.getNestedNameSpecifier();
+          auto NNSK = NNS->getKind();
+          if (NNSK == NestedNameSpecifier::TypeSpec || NNSK == NestedNameSpecifier::TypeSpecWithTemplate) {
+            processTypeLoc(NNSL.getTypeLoc());
+          }
+          
+          NNSL = NNSL.getPrefix();
+        }
+      }
+      break;
+    }
+    
     case TypeLoc::TypeLocClass::TemplateSpecialization:
     {
       if (auto TSTL = dyn_cast<TemplateSpecializationTypeLoc>(&TL)) {
@@ -449,6 +480,8 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
       // skip if it's an anonymous type
       // read Clang`s definition (in RecordDecl) -- not exactly what you think
       // so we use the length of name
+      bool match = false;
+      
       if (auto TT = dyn_cast<TagType>(TL.getTypePtr())) {
         auto TD = TT->getDecl();
         if (TD->getNameAsString().size() == 0) {
@@ -460,10 +493,15 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
         if (TD->getLocation() == BL) {
           break; // bail out from the case          
         }
+        
+        match = TD->getQualifiedNameAsString() == fromTypeQualifiedName;
+      }
+      else {
+        match = QT.getAsString() == fromTypeQualifiedName;
       }
       
       // TODO: Correct way of comparing type?
-      if (QT.getAsString() == fromTypeQualifiedName) {
+      if (match) {
         
         Preprocessor &P = sema->getPreprocessor();
         auto BLE = P.getLocForEndOfToken(BL);
