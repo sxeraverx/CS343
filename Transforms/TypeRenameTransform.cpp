@@ -154,7 +154,8 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       if (auto CD = dyn_cast<CXXConstructorDecl>(D)) {
         auto BL = CD->getLocation();
 
-        if (BL.isValid() && tagNameMatches(CD->getParent())) {
+        if (BL.isValid() && CD->getParent()->getLocation() != BL && 
+            tagNameMatches(CD->getParent())) {
           Preprocessor &P = sema->getPreprocessor();
           if (BL.isMacroID()) {
             // TODO: emit error
@@ -180,7 +181,8 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       if (auto DD = dyn_cast<CXXDestructorDecl>(D)) {
         // if parent matches
         auto BL = DD->getLocation();        
-        if (BL.isValid() && tagNameMatches(DD->getParent())) {
+        if (BL.isValid() && DD->getParent()->getLocation() != BL &&
+            tagNameMatches(DD->getParent())) {
         
           // need to use raw_identifier because Lexer::findLocationAfterToken
           // performs a raw lexing
@@ -193,14 +195,13 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
           // TODO: Find the right way to do this -- consider this a hack
 
           if (EL.isValid()) {
-            // EL is 1 char after the dtor name ~Foo
+            // EL is 1 char after the dtor name ~Foo, so -1 == pos of 'o'
             SourceLocation NE = EL.getLocWithOffset(-1);
-          
-            // BL is EL - len(name) char, but since getNameAsString()
-            // returns the string with the ~ prefix, we just use that
+            
+            // "~Foo" has length of 4, we want -3 == pos of 'F'
             SourceLocation NB =
-              EL.getLocWithOffset(- DD->getNameAsString().size());
-          
+              EL.getLocWithOffset(-DD->getNameAsString().size() + 1);
+
             if (NB.isMacroID()) {
               // TODO: emit error
             }
@@ -380,12 +381,12 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   pushIndent();
   auto QT = TL.getType();
     
-  // llvm::errs() << indent()
-  //   << "TypeLoc"
-  //   << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
-  //   << "\n" << indent() << "qualType as str: " << QT.getAsString()
-  //   << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
-  //   << "\n";
+  llvm::errs() << indent()
+    << "TypeLoc"
+    << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
+    << "\n" << indent() << "qualType as str: " << QT.getAsString()
+    << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+    << "\n";
     
   switch(TL.getTypeLocClass()) {
     case TypeLoc::TypeLocClass::TemplateSpecialization:
@@ -427,8 +428,6 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
           if (BLE.isValid()) {
             auto EL = BLE.getLocWithOffset(-1);
             rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
-
-            // llvm::errs() << "renamed: " << loc(BL) << "\n";
             break; // do
           }
         }
@@ -471,8 +470,6 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
         if (BLE.isValid()) {
           auto EL = BLE.getLocWithOffset(-1);
           rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
-
-          // llvm::errs() << "renamed: " << loc(BL) << "\n";
         }
       }
       break;
