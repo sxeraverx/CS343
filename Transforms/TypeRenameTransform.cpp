@@ -30,6 +30,7 @@ protected:
   void processDeclContext(DeclContext *DC);  
   void processStmt(Stmt *S);
   void processTypeLoc(TypeLoc TL);
+  void processParmVarDecl(ParmVarDecl *P);
   bool tagNameMatches(TagDecl *T);
   void writeOutput();
   
@@ -223,15 +224,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       
       // rename the params' types
       for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
-        auto PTSI = (*PI)->getTypeSourceInfo();
-        if (PTSI) {
-          processTypeLoc(PTSI->getTypeLoc());
-        }
-        
-        // then the default vars
-        if ((*PI)->hasInit()) {
-          processStmt((*PI)->getInit());
-        }
+        processParmVarDecl(*PI);
       }
       
       // handle body
@@ -289,10 +282,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       }
 
       for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {        
-        auto PTSI = (*PI)->getTypeSourceInfo();
-        if (PTSI) {
-          processTypeLoc(PTSI->getTypeLoc());
-        }
+        processParmVarDecl(*PI);
       }
       
       // handle body
@@ -375,12 +365,12 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   pushIndent();
   auto QT = TL.getType();
     
-  // llvm::errs() << indent()
-  //   << "TypeLoc"
-  //   << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
-  //   << "\n" << indent() << "qualType as str: " << QT.getAsString()
-  //   << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
-  //   << "\n";
+  llvm::errs() << indent()
+    << "TypeLoc"
+    << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
+    << "\n" << indent() << "qualType as str: " << QT.getAsString()
+    << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+    << "\n";
     
   switch(TL.getTypeLocClass()) {
     
@@ -400,6 +390,16 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
           }
           
           NNSL = NNSL.getPrefix();
+        }
+      }
+      break;
+    }
+    
+    case TypeLoc::TypeLocClass::FunctionProto:
+    {
+      if (auto FTL = dyn_cast<FunctionTypeLoc>(&TL)) {
+        for (unsigned I = 0, E = FTL->getNumArgs(); I != E; ++I) {
+          processParmVarDecl(FTL->getArg(I));
         }
       }
       break;
@@ -500,6 +500,19 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL)
   processTypeLoc(TL.getNextTypeLoc());
 
   popIndent();
+}
+
+void TypeRenameTransform::processParmVarDecl(ParmVarDecl *P)
+{
+  auto PTSI = P->getTypeSourceInfo();
+  if (PTSI) {
+    processTypeLoc(PTSI->getTypeLoc());
+  }
+  
+  // then the default vars
+  if (P->hasInit()) {
+    processStmt(P->getInit());
+  }  
 }
 
 bool TypeRenameTransform::tagNameMatches(TagDecl *T)
