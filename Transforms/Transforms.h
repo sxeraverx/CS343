@@ -11,11 +11,13 @@ class clang::CompilerInstance;
 
 class Transform : public clang::SemaConsumer
 {
+public:
+	~Transform();
 protected:
 	clang::Sema *sema;
 	clang::Rewriter rewriter;
-	virtual std::string getName() = 0;
-	virtual void InitializeSema(clang::Sema &s) override {sema = &s; rewriter.setSourceMgr(this->sema->getSourceManager(), sema->getLangOpts());}
+	virtual void InitializeSema(clang::Sema &s) override;
+	friend class TransformFactory;
 
 };
 
@@ -29,38 +31,30 @@ typedef Transform* (*transform_creator)(void);
 class TransformRegistry
 {
  private:
-	std::vector<transform_creator> m_transforms;
+	std::map<std::string,transform_creator> m_transforms;
  public:
-	typedef std::vector<transform_creator>::iterator iterator;
+	std::map<std::string, std::map<std::string, std::string> > config;
 	static TransformRegistry& get();
-	void add(transform_creator);
-	iterator begin();
-	iterator end();
+	void add(const std::string &, transform_creator);
+	const transform_creator operator[](const std::string &name) const;
 };
 
 class TransformRegistration
 {
- public:
-	TransformRegistration(transform_creator);
+public:
+	TransformRegistration(const std::string& name, transform_creator creator) {
+		TransformRegistry::get().add(name, creator);
+	}
 };
 
 #define REGISTER_TRANSFORM(transform)	  \
 	TransformRegistration _transform_registration_ \
-	## transform(&transform_factory<transform>)
-
-#define DEFINE_TRANSFORM_BEGIN(transform)	  \
-	class transform##Transform : public Transform { \
-public:	  \
- std::string getName() override {return #transform "Transform"; }
-
-#define DEFINE_TRANSFORM_END(transform)	  \
-	}; \
-	REGISTER_TRANSFORM(transform##Transform)
+	## transform(#transform, &transform_factory<transform>)
 
 class TransformFactory : public clang::tooling::FrontendActionFactory {
- private:
+private:
 	transform_creator tcreator;
- public:
+public:
 	TransformFactory(transform_creator creator);
 	clang::FrontendAction *create() override;
 };

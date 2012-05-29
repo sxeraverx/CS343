@@ -18,8 +18,6 @@ using namespace clang;
 class TypeRenameTransform : public Transform {
 public:
   TypeRenameTransform() : indentLevel(0) {}
-  
-	virtual std::string getName() override { return "TypeRenameTransform"; }
 
   virtual void HandleTranslationUnit(ASTContext &C) override;
   
@@ -36,7 +34,6 @@ protected:
   
   void processParmVarDecl(ParmVarDecl *P);
   bool tagNameMatches(TagDecl *T);
-  void writeOutput();
   
   // TODO: Move these to a utility
 private:
@@ -92,17 +89,9 @@ REGISTER_TRANSFORM(TypeRenameTransform);
 void TypeRenameTransform::HandleTranslationUnit(ASTContext &C)
 {
   // TODO: Temporary measure of config
-  const char* f = getenv("FROM_TYPE_QUALIFIED_NAME");
-  const char* t = getenv("TO_TYPE_NAME");
   
-  if (!f || !t) {
-    llvm::errs() << "No FROM_TYPE_QUALIFIED_NAME or TO_CLASS_NAME specified"
-      " -- skipping ClassRenameTransform\n";
-    return;
-  }
-  
-  fromTypeQualifiedName = f;
-  toTypeName = t;
+	fromTypeQualifiedName = TransformRegistry::get().config["TypeRenameTransform"].begin()->first;
+	toTypeName = TransformRegistry::get().config["TypeRenameTransform"].begin()->second;
   
   
   llvm::errs() << "TypeRenameTransform, from: " << fromTypeQualifiedName
@@ -110,7 +99,6 @@ void TypeRenameTransform::HandleTranslationUnit(ASTContext &C)
 
   auto TUD = C.getTranslationUnitDecl();
   processDeclContext(TUD);
-  writeOutput();
 }
 
 // TODO: A special case for top-level decl context
@@ -543,39 +531,4 @@ bool TypeRenameTransform::tagNameMatches(TagDecl *T)
   fullName += " ";
   fullName += QTNS;
   return fullName == fromTypeQualifiedName;
-}
-
-void TypeRenameTransform::writeOutput()
-{
-  // output rewritten files
-  // TODO: move this to a utility class
-  for (auto I = rewriter.buffer_begin(), E = rewriter.buffer_end();
-       I != E; ++I) {
-
-    auto F = rewriter.getSourceMgr().getFileEntryForID(I->first);
-    std::string outName(F->getName());
-    size_t ext = outName.rfind(".");
-    if (ext == std::string::npos) {
-      ext = outName.length();
-    }
-
-    outName.insert(ext, ".refactored");
-
-    // TODO: Use diagnostics for error report?
-    llvm::errs() << "Output to: " << outName << "\n";
-    std::string outErrInfo;
-
-    llvm::raw_fd_ostream outFile(outName.c_str(), outErrInfo, 0);
-
-    if (outErrInfo.empty()) {
-      // output rewritten source code
-      auto RB = &I->second;
-      outFile << std::string(RB->begin(), RB->end());
-    }
-    else {
-      llvm::errs() << "Cannot open " << outName << " for writing\n";
-    }
-
-    outFile.close();
-  }  
 }

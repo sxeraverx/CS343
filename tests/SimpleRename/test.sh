@@ -1,8 +1,10 @@
 #!/bin/sh
-export FROM_CLASS_NAME="class SampleNameSpace::Foo"
-export TO_CLASS_NAME="Foobar"
-cd ../../
+git checkout Foo.cpp
+git checkout Foo.h
+mkdir -p ../../Build
+cd ../../Build/
+cmake ../
 make
 cd -
 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .
-../../refactorial Foo.cpp
+../../Build/refactorial < refax.yml
