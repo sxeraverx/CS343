@@ -5,4 +5,4 @@ cd ../../
 make
 cd -
 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .
-../../refactorial Foo.cpp
+../../Build/refactorial Foo.cpp

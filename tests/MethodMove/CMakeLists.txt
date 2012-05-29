@@ -8,3 +8,4 @@ SET(CMAKE_C_COMPILER clang)
 SET(CMAKE_CXX_COMPILER clang++)
 
 ADD_LIBRARY (foo foo.cpp)
+ADD_LIBRARY (bar bar.cpp)

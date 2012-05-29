@@ -1,0 +1,4 @@
+---
+Transforms:
+  MethodMove:
+    A::MyNameSpace::Foo: foo.cpp

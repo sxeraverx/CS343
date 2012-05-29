@@ -7,7 +7,7 @@ SET(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 SET(CMAKE_BUILD_TYPE None)
 SET(CMAKE_C_COMPILER clang)
 SET(CMAKE_CXX_COMPILER clang++)
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_LINKER_FLAGS} -g -fno-rtti -fcolor-diagnostics -Wno-c++11-extensions")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_LINKER_FLAGS} -O0 -g -fno-rtti -fcolor-diagnostics -Wno-c++11-extensions -DBOOST_NO_TYPEID -DBOOST_NO_RTTI")
 SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_CXX_LINKER_FLAGS} -g -fno-rtti")
 IF(APPLE)
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ --std=c++0x")
@@ -25,7 +25,12 @@ LLVM_MAP_COMPONENTS_TO_LIBRARIES(REQ_LLVM_LIBRARIES native)
 
 SET(CLANG_LIBRARIES clangAnalysis clangAST clangBasic clangDriver clangEdit clangFrontend clangLex clangParse clangRewrite clangSema clangSerialization clangTooling)
 
-SET(Transforms_sources Transforms.cpp Accessors.cpp MethodMoveTransform.cpp IdentityTransform.cpp TypeRenameTransform.cpp)
+SET(Transforms_sources
+  Accessors.cpp
+  IdentityTransform.cpp
+  MethodMoveTransform.cpp
+  Transforms.cpp
+  TypeRenameTransform.cpp)
 
 FOREACH(arg ${Transforms_sources})
   LIST(APPEND sources "Transforms/${arg}")
@@ -34,4 +39,4 @@ ENDFOREACH(arg ${Transforms_sources})
 SET(sources ${sources} main.cpp)
 
 ADD_EXECUTABLE (refactorial ${sources} )
-TARGET_LINK_LIBRARIES (refactorial ${REQ_LLVM_LIBRARIES} ${CLANG_LIBRARIES})
+TARGET_LINK_LIBRARIES (refactorial ${REQ_LLVM_LIBRARIES} ${CLANG_LIBRARIES} yaml-cpp)

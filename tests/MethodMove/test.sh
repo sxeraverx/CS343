@@ -1,9 +1,11 @@
 #!/bin/sh
-rm *.refactored.*
-export BATCH_MOVE_CLASS_NAME="A::MyNameSpace::Foo"
-cd ../../
+git checkout foo.cpp
+git checkout bar.cpp
+git checkout foo.h
+mkdir -p ../../Build/
+cd ../../Build/
 cmake .
 make
 cd -
 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .
-../../refactorial foo.cpp
+../../Build/refactorial < refax.yml
