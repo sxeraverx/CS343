@@ -2,16 +2,23 @@
 
 namespace SampleNameSpace {
   int Foo::counter = 0;
+
+  class A : public Foo {
+  public:
+    void wasteCycle() {
+      Foo::wasteCycle();
+    }
+  };
 };
 
 void SampleNameSpace::Foo::doNothing() {
-  wasteCycle();
-  Foo::wasteCycle();
+  cycleWaste();
+  cycleWaste::wasteCycle();
 }
 
 using namespace SampleNameSpace;
 
-void Foo::wasteCycle() {
+void Foo::cycleWaste() {
   Foo a(this);
   for (int b = 0; b < 10; b++) {
     Foo c(this);
