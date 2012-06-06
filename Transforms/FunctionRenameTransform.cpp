@@ -3,16 +3,27 @@
 //
 
 #include "Transforms.h"
+#include <clang/Lex/Preprocessor.h>
 
 using namespace clang;
 
 class FunctionRenameTransform : public Transform {
 public:
+  FunctionRenameTransform() : indentLevel(0) {}  
   virtual void HandleTranslationUnit(ASTContext &) override;
+  
+  void collectAndRenameFunctionDecl(DeclContext *DC);
   void processDeclContext(DeclContext *DC);  
   void processStmt(Stmt *S);
   
 protected:
+  std::string fromFunctionQualifiedName;
+  std::string toFunctionName;
+  
+  std::map<Decl *, std::string> functionNameMap;
+  bool functionMatches(FunctionDecl *F, std::string &outNewName);
+  void renameDecl(Decl *D, std::string& N);
+  
   int indentLevel;
   
   std::string indent() {
@@ -39,9 +50,50 @@ REGISTER_TRANSFORM(FunctionRenameTransform);
 
 void FunctionRenameTransform::HandleTranslationUnit(ASTContext &C)
 {
+	fromFunctionQualifiedName =
+	  TransformRegistry::get().config["FunctionRenameTransform"].begin()->first;
+  toFunctionName =
+    TransformRegistry::get().config["FunctionRenameTransform"].begin()->second;
+  
+  llvm::errs() << "FunctionRenameTransform, from: " << fromFunctionQualifiedName
+    << ", to: "<< toFunctionName << "\n";
+  
   auto TUD = C.getTranslationUnitDecl();
+  collectAndRenameFunctionDecl(TUD);
   processDeclContext(TUD);
 }
+
+void FunctionRenameTransform::collectAndRenameFunctionDecl(DeclContext *DC)
+{
+  // TODO: ignore system headers (/usr, /opt, /System and /Library)
+  // TODO: Skip globally touched locations
+  //
+  // if a.cpp and b.cpp both include c.h, then once a.cpp is processed,
+  // we cas skip any location that is not in b.cpp
+  //
+
+  pushIndent();
+  
+  for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
+    if (auto D = dyn_cast<FunctionDecl>(*I)) {
+      // TODO: If it's a ctor/dtor, it's an error
+      llvm::errs() << indent() << "Function " << D->getQualifiedNameAsString() << ", at: "<< loc(D->getLocation()) << "\n";
+      
+      std::string newName;
+      if (functionMatches(D, newName)) {
+        llvm::errs() << indent() << "matches: " << newName << "\n";
+        renameDecl(D, newName);
+      }
+    }
+    
+    // descend into the next level (namespace, etc.)    
+    if (auto innerDC = dyn_cast<DeclContext>(*I)) {
+      collectAndRenameFunctionDecl(innerDC);
+    }
+  }
+  popIndent();  
+}
+
 
 void FunctionRenameTransform::processDeclContext(DeclContext *DC)
 {  
@@ -115,9 +167,72 @@ void FunctionRenameTransform::processStmt(Stmt *S)
   pushIndent();
   llvm::errs() << indent() << "Stmt: " << S->getStmtClassName() << ", at: "<< loc(S->getLocStart()) << "\n";
   
+  if (auto CE = dyn_cast<CallExpr>(S)) {
+    if (auto FD = CE->getDirectCallee()) {
+      std::string newName;
+      if (functionMatches(FD, newName)) {
+        llvm::errs() << indent() << "match: " << newName << "\n";
+
+        auto BL = S->getLocStart();        
+        if (BL.isValid()) {    
+          if (BL.isMacroID()) {
+            // TODO: emit error
+          }
+          else {        
+            Preprocessor &P = sema->getPreprocessor();              
+            auto BLE = P.getLocForEndOfToken(BL);
+            if (BLE.isValid()) {
+              auto EL = BLE.getLocWithOffset(-1);
+              rewriter.ReplaceText(SourceRange(BL, EL), newName);
+            }
+          }
+        }
+      }
+    }
+  }
+  
   for (auto I = S->child_begin(), E = S->child_end(); I != E; ++I) {
     processStmt(*I);
   }
   
   popIndent();
+}
+
+
+bool FunctionRenameTransform::functionMatches(FunctionDecl *F,
+                                              std::string &outNewName)
+{
+  // TODO: Replace with regex
+  auto I = functionNameMap.find(F);
+  if (I != functionNameMap.end()) {
+    outNewName = (*I).second;
+    return true;
+  }
+  
+  auto QN = F->getQualifiedNameAsString();
+  if (QN != fromFunctionQualifiedName) {
+    return false;
+  }
+  
+  functionNameMap[F] = toFunctionName;
+  outNewName = toFunctionName;
+  return true;
+}
+
+void FunctionRenameTransform::renameDecl(Decl *D, std::string &N)
+{
+  auto BL = D->getLocation();  
+  if (BL.isValid()) {    
+    if (BL.isMacroID()) {
+      // TODO: emit error
+    }
+    else {
+      Preprocessor &P = sema->getPreprocessor();      
+      auto BLE = P.getLocForEndOfToken(BL);
+      if (BLE.isValid()) {
+        auto EL = BLE.getLocWithOffset(-1);
+        rewriter.ReplaceText(SourceRange(BL, EL), N);
+      }
+    }
+  }
 }

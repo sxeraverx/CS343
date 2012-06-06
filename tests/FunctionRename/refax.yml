@@ -1,4 +1,4 @@
 ---
 Transforms:
   FunctionRename:
-    SampleNameSpace::Foo: Foobar
+    SampleNameSpace::Foo::wasteCycle: cycleWaste

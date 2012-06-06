@@ -34,6 +34,24 @@ Then you need to build LLVW and Clang with the overridden compiler and linker se
     
 You probably noticed that we don't use `-std=c++0x` in `CXXFLAGS`. Parts of LLVM won't build with C++11 enabled.
 
+We also use yaml-cpp now. Check out the source at: http://code.google.com/p/yaml-cpp/source/checkout
+
+yaml-cpp uses Boost. You can use the one installed by MacPorts or any other package manager.
+
+Note that yaml-cpp **must be build with the Clang compiler you've built**! This is because the compiler that comes with Xcode has a bug (http://llvm.org/bugs/show_bug.cgi?id=13003) that cause it to fail compiling yaml-cpp.
+
+Insert the following lines to CMakeLists.txt in the yaml-cpp project root, right after the line `include(CheckCXXCompilerFlag)`:
+
+    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ --std=c++0x -I/opt/local/include")
+    SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -stdlib=libc++")
+    SET(CMAKE_C_COMPILER /usr/local/bin/clang)
+    SET(CMAKE_CXX_COMPILER /usr/local/bin/clang++)
+
+And build yaml-cpp. Now you're all set.
+
+
+
+
 
 ## Generating `compile_commands.json`
 
