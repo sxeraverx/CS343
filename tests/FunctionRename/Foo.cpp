@@ -5,6 +5,8 @@ namespace SampleNameSpace {
 };
 
 void SampleNameSpace::Foo::doNothing() {
+  wasteCycle();
+  Foo::wasteCycle();
 }
 
 using namespace SampleNameSpace;
