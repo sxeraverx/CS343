@@ -92,8 +92,8 @@ void TypeRenameTransform::HandleTranslationUnit(ASTContext &C)
 {
   // TODO: Temporary measure of config
   
-	fromTypeQualifiedName = TransformRegistry::get().config["TypeRenameTransform"].begin()->first;
-	toTypeName = TransformRegistry::get().config["TypeRenameTransform"].begin()->second;
+	fromTypeQualifiedName = TransformRegistry::get().config["TypeRename"].begin()->first.as<std::string>();
+	toTypeName = TransformRegistry::get().config["TypeRename"].begin()->second.as<std::string>();
   
   
   llvm::errs() << "TypeRenameTransform, from: " << fromTypeQualifiedName

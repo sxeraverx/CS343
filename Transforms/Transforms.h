@@ -7,7 +7,7 @@
 #include <clang/Tooling/Tooling.h>
 #include <clang/Frontend/CompilerInstance.h>
 
-class clang::CompilerInstance;
+#include <yaml-cpp/yaml.h>
 
 class Transform : public clang::SemaConsumer
 {
@@ -18,7 +18,6 @@ protected:
 	clang::Rewriter rewriter;
 	virtual void InitializeSema(clang::Sema &s) override;
 	friend class TransformFactory;
-
 };
 
 template <typename T> Transform* transform_factory()
@@ -33,7 +32,7 @@ class TransformRegistry
  private:
 	std::map<std::string,transform_creator> m_transforms;
  public:
-	std::map<std::string, std::map<std::string, std::string> > config;
+	YAML::Node config;
 	static TransformRegistry& get();
 	void add(const std::string &, transform_creator);
 	const transform_creator operator[](const std::string &name) const;

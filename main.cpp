@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 	std::vector<YAML::Node> config = YAML::LoadAll(std::cin);
 	for(auto configSectionIter = config.begin(); configSectionIter != config.end(); ++configSectionIter)
 	{
-		TransformRegistry::get().config.clear();
+		TransformRegistry::get().config = YAML::Node();
 		//figure out which files we need to work on
 		YAML::Node& configSection = *configSectionIter;
 		std::vector<std::string> inputFiles;
@@ -54,17 +54,21 @@ int main(int argc, char **argv)
 		llvm::OwningPtr<tooling::CompilationDatabase> Compilations(tooling::CompilationDatabase::loadFromDirectory(".", errorMessage));
 		tooling::ClangTool ct(*Compilations.take(), inputFiles);
 		
-		std::map<std::string,std::map<std::string, std::string> > transforms = configSection["Transforms"].as<decltype(transforms)>();
-		//save the config for this run
-		for(auto iter = transforms.begin(); iter != transforms.end(); ++iter)
-		{
-			TransformRegistry::get().config[iter->first + "Transform"].insert(iter->second.begin(), iter->second.end());
-		}
+		TransformRegistry::get().config = configSection["Transforms"];
 
 		//finally, run
-		for(auto iter = transforms.begin(); iter != transforms.end(); iter++)
-			ct.run(new TransformFactory(TransformRegistry::get()[iter->first + "Transform"]));
+		for(auto iter = configSection["Transforms"].begin(); iter != configSection["Transforms"].end(); iter++)
+		{
+			llvm::errs() << iter->first.as<std::string>() +"Transform" << "\n";
+			ct.run(new TransformFactory(TransformRegistry::get()[iter->first.as<std::string>() + "Transform"]));
+		}
 		
 	}
 	return 0;
 }
+
+
+
+
+
+

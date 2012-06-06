@@ -1,0 +1,21 @@
+#include "foo.h"
+
+#include <iostream>
+
+using namespace std;
+
+int main(void)
+{
+	Foo foo;
+	foo.x = 1;
+	cout << foo.x << endl;
+	foo.Foo::x += 1;
+	int y;
+	if(foo.x)
+		y = foo.x++;
+	else {
+		foo.x--;
+	}
+	foo.x <<= 1;
+	int z = (foo.x+=1+foo.x);
+}

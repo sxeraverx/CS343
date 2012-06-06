@@ -28,7 +28,7 @@ LLVM_MAP_COMPONENTS_TO_LIBRARIES(REQ_LLVM_LIBRARIES native)
 SET(CLANG_LIBRARIES clangAnalysis clangAST clangBasic clangDriver clangEdit clangFrontend clangLex clangParse clangRewrite clangSema clangSerialization clangTooling)
 
 SET(Transforms_sources
-  Accessors.cpp
+  AccessorsTransform.cpp
   FunctionRenameTransform.cpp
   IdentityTransform.cpp
   MethodMoveTransform.cpp

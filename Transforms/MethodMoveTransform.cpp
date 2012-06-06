@@ -40,10 +40,10 @@ REGISTER_TRANSFORM(MethodMoveTransform);
 void MethodMoveTransform::HandleTranslationUnit(ASTContext &C)
 {
 	auto movingSpec = TransformRegistry::get().config["MethodMoveTransform"].begin();
-	movingClassName = movingSpec->first;
+	movingClassName = movingSpec->first.as<std::string>();
 	clang::SourceManager &SM = C.getSourceManager();
 	clang::FileManager &FM = SM.getFileManager();
-	if(FM.getFile(movingSpec->second) == SM.getFileEntryForID(SM.getMainFileID()))
+	if(FM.getFile(movingSpec->second.as<std::string>()) == SM.getFileEntryForID(SM.getMainFileID()))
 	{
 		llvm::errs() << "MovingClassName: " << movingClassName << "\n";
 		llvm::errs() << SM.getFileEntryForID(SM.getMainFileID())->getName() << "\n";
