@@ -29,6 +29,7 @@ SET(CLANG_LIBRARIES clangAnalysis clangAST clangBasic clangDriver clangEdit clan
 
 SET(Transforms_sources
   Accessors.cpp
+  FunctionRenameTransform.cpp
   IdentityTransform.cpp
   MethodMoveTransform.cpp
   Transforms.cpp
