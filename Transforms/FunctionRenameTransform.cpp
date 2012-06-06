@@ -52,9 +52,9 @@ REGISTER_TRANSFORM(FunctionRenameTransform);
 void FunctionRenameTransform::HandleTranslationUnit(ASTContext &C)
 {
 	fromFunctionQualifiedName =
-	  TransformRegistry::get().config["FunctionRenameTransform"].begin()->first;
+	  TransformRegistry::get().config["FunctionRenameTransform"].begin()->first.as<std::string>();
   toFunctionName =
-    TransformRegistry::get().config["FunctionRenameTransform"].begin()->second;
+    TransformRegistry::get().config["FunctionRenameTransform"].begin()->second.as<std::string>();
   
   llvm::errs() << "FunctionRenameTransform, from: " << fromFunctionQualifiedName
     << ", to: "<< toFunctionName << "\n";
