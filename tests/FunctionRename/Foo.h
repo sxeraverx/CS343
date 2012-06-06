@@ -22,7 +22,7 @@ namespace SampleNameSpace {
       x = newX;
     }
 
-    void wasteCycle();
+    virtual void wasteCycle();
     void doNothing();
   };
 
