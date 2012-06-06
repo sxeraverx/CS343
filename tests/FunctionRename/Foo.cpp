@@ -12,13 +12,13 @@ namespace SampleNameSpace {
 };
 
 void SampleNameSpace::Foo::doNothing() {
-  cycleWaste();
-  cycleWaste::wasteCycle();
+  wasteCycle();
+  Foo::wasteCycle();
 }
 
 using namespace SampleNameSpace;
 
-void Foo::cycleWaste() {
+void Foo::wasteCycle() {
   Foo a(this);
   for (int b = 0; b < 10; b++) {
     Foo c(this);
