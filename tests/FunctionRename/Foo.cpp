@@ -33,6 +33,7 @@ Foo test() {
 }
 
 Foo test(Foo *a) {
+  test();
   return Foo(a);
 }
 
