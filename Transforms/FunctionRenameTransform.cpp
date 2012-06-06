@@ -21,8 +21,9 @@ protected:
   std::string toFunctionName;
   
   std::map<Decl *, std::string> functionNameMap;
-  bool functionMatches(FunctionDecl *F, std::string &outNewName);
-  void renameDecl(Decl *D, std::string& N);
+  bool functionMatches(NamedDecl *N, std::string &outNewName);
+  void renameLocation(SourceLocation L, std::string& N);
+
   
   int indentLevel;
   
@@ -82,7 +83,7 @@ void FunctionRenameTransform::collectAndRenameFunctionDecl(DeclContext *DC)
       std::string newName;
       if (functionMatches(D, newName)) {
         llvm::errs() << indent() << "matches: " << newName << "\n";
-        renameDecl(D, newName);
+        renameLocation(D->getLocation(), newName);
       }
     }
     
@@ -166,31 +167,51 @@ void FunctionRenameTransform::processStmt(Stmt *S)
   
   pushIndent();
   llvm::errs() << indent() << "Stmt: " << S->getStmtClassName() << ", at: "<< loc(S->getLocStart()) << "\n";
-  
-  if (auto CE = dyn_cast<CallExpr>(S)) {
-    if (auto FD = CE->getDirectCallee()) {
-      std::string newName;
-      if (functionMatches(FD, newName)) {
-        llvm::errs() << indent() << "match: " << newName << "\n";
 
-        auto BL = S->getLocStart();        
-        if (BL.isValid()) {    
-          if (BL.isMacroID()) {
-            // TODO: emit error
-          }
-          else {        
-            Preprocessor &P = sema->getPreprocessor();              
-            auto BLE = P.getLocForEndOfToken(BL);
-            if (BLE.isValid()) {
-              auto EL = BLE.getLocWithOffset(-1);
-              rewriter.ReplaceText(SourceRange(BL, EL), newName);
-            }
-          }
-        }
+  if (auto E = dyn_cast<MemberExpr>(S)) {
+    if (auto D = E->getMemberDecl()) {
+      std::string newName;
+      if (functionMatches(D, newName)) {
+        llvm::errs() << indent() << "match: " << newName << ", at: " << loc(E->getMemberLoc()) << "\n";
+        renameLocation(E->getMemberLoc(), newName);
+      }
+    }
+  }
+  else if (auto E = dyn_cast<DeclRefExpr>(S)) {
+    if (auto D = E->getDecl()) {
+      std::string newName;
+      if (functionMatches(D, newName)) {
+        llvm::errs() << indent() << "match: " << newName << ", at: " << loc(E->getLocation()) << "\n";
+        renameLocation(E->getLocation(), newName);
       }
     }
   }
   
+
+  // if (auto CE = dyn_cast<CallExpr>(S)) {
+  //   if (auto FD = CE->getDirectCallee()) {
+  //     std::string newName;
+  //     if (functionMatches(FD, newName)) {
+  //       llvm::errs() << indent() << "match: " << newName << "\n";
+  //
+  //       auto BL = S->getLocStart();
+  //       if (BL.isValid()) {
+  //         if (BL.isMacroID()) {
+  //           // TODO: emit error
+  //         }
+  //         else {
+  //           Preprocessor &P = sema->getPreprocessor();
+  //           auto BLE = P.getLocForEndOfToken(BL);
+  //           if (BLE.isValid()) {
+  //             auto EL = BLE.getLocWithOffset(-1);
+  //             rewriter.ReplaceText(SourceRange(BL, EL), newName);
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
+
   for (auto I = S->child_begin(), E = S->child_end(); I != E; ++I) {
     processStmt(*I);
   }
@@ -199,39 +220,38 @@ void FunctionRenameTransform::processStmt(Stmt *S)
 }
 
 
-bool FunctionRenameTransform::functionMatches(FunctionDecl *F,
+bool FunctionRenameTransform::functionMatches(NamedDecl *N,
                                               std::string &outNewName)
 {
   // TODO: Replace with regex
-  auto I = functionNameMap.find(F);
+  auto I = functionNameMap.find(N);
   if (I != functionNameMap.end()) {
     outNewName = (*I).second;
     return true;
   }
   
-  auto QN = F->getQualifiedNameAsString();
+  auto QN = N->getQualifiedNameAsString();
   if (QN != fromFunctionQualifiedName) {
     return false;
   }
   
-  functionNameMap[F] = toFunctionName;
+  functionNameMap[N] = toFunctionName;
   outNewName = toFunctionName;
   return true;
 }
 
-void FunctionRenameTransform::renameDecl(Decl *D, std::string &N)
+void FunctionRenameTransform::renameLocation(SourceLocation L, std::string &N)
 {
-  auto BL = D->getLocation();  
-  if (BL.isValid()) {    
-    if (BL.isMacroID()) {
+  if (L.isValid()) {
+    if (L.isMacroID()) {
       // TODO: emit error
     }
     else {
       Preprocessor &P = sema->getPreprocessor();      
-      auto BLE = P.getLocForEndOfToken(BL);
-      if (BLE.isValid()) {
-        auto EL = BLE.getLocWithOffset(-1);
-        rewriter.ReplaceText(SourceRange(BL, EL), N);
+      auto LE = P.getLocForEndOfToken(L);
+      if (LE.isValid()) {
+        auto E = LE.getLocWithOffset(-1);
+        rewriter.ReplaceText(SourceRange(L, E), N);
       }
     }
   }
