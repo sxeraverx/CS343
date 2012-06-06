@@ -32,6 +32,8 @@ protected:
   // TODO: be smart, if TL is not within a marco, it's do-able
   void processTypeLoc(TypeLoc TL, bool forceRewriteMacro = false);
   
+  void processQualifierLoc(NestedNameSpecifierLoc NNSL,
+                           bool forceRewriteMacro = false);
   void processParmVarDecl(ParmVarDecl *P);
   bool tagNameMatches(TagDecl *T);
   
@@ -219,6 +221,9 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         processParmVarDecl(*PI);
       }
       
+      // the name itself
+      processQualifierLoc(D->getQualifierLoc());
+      
       // handle body
       if (D->hasBody()) {
         processStmt(D->getBody());
@@ -229,6 +234,8 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
         processTypeLoc(TSI->getTypeLoc());
       }
       
+      processQualifierLoc(D->getQualifierLoc());      
+      
       if (D->hasInit()) {
         processStmt(D->getInit());
       }
@@ -237,6 +244,8 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       if (auto TSI = D->getTypeSourceInfo()) {
         processTypeLoc(TSI->getTypeLoc());
       }
+      
+      processQualifierLoc(D->getQualifierLoc());      
     }
     else if (auto D = dyn_cast<TypedefDecl>(*I)) {
       // typedef T n -- we want to see first if it's n that needs renaming
@@ -321,6 +330,12 @@ void TypeRenameTransform::processStmt(Stmt *S)
   else if (auto E = dyn_cast<ExplicitCastExpr>(S)) {
     processTypeLoc(E->getTypeInfoAsWritten()->getTypeLoc());  
   }
+  else if (auto E = dyn_cast<CXXTemporaryObjectExpr>(S)) {
+    auto TSI = E->getTypeSourceInfo();
+    if (TSI) {
+      processTypeLoc(TSI->getTypeLoc());  
+    }
+  }
   else if (auto E = dyn_cast<VAArgExpr>(S)) {
     // TODO: This will be a problem if the arg is also a macro expansion...
     processTypeLoc(E->getWrittenTypeInfo()->getTypeLoc(), true);  
@@ -386,16 +401,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     case TypeLoc::TypeLocClass::Elaborated:
     {
       if (auto ETL = dyn_cast<ElaboratedTypeLoc>(&TL)) {
-        auto NNSL = ETL->getQualifierLoc();
-        while (NNSL) {
-          auto NNS = NNSL.getNestedNameSpecifier();
-          auto NNSK = NNS->getKind();
-          if (NNSK == NestedNameSpecifier::TypeSpec || NNSK == NestedNameSpecifier::TypeSpecWithTemplate) {
-            processTypeLoc(NNSL.getTypeLoc(), forceRewriteMacro);
-          }
-          
-          NNSL = NNSL.getPrefix();
-        }
+        processQualifierLoc(ETL->getQualifierLoc(), forceRewriteMacro);
       }
       break;
     }
@@ -504,6 +510,21 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
   
   processTypeLoc(TL.getNextTypeLoc(), forceRewriteMacro);
   popIndent();
+}
+
+// fix the "B" part of names like A::B::C if B is our target
+void TypeRenameTransform::processQualifierLoc(NestedNameSpecifierLoc NNSL,
+                                              bool forceRewriteMacro)
+{
+  while (NNSL) {
+    auto NNS = NNSL.getNestedNameSpecifier();
+    auto NNSK = NNS->getKind();
+    if (NNSK == NestedNameSpecifier::TypeSpec || NNSK == NestedNameSpecifier::TypeSpecWithTemplate) {
+      processTypeLoc(NNSL.getTypeLoc(), forceRewriteMacro);
+    }
+    
+    NNSL = NNSL.getPrefix();
+  }  
 }
 
 void TypeRenameTransform::processParmVarDecl(ParmVarDecl *P)
