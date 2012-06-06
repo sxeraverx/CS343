@@ -1,4 +1,4 @@
 ---
 Transforms:
   TypeRename:
-    class SampleNamespace::Foo: Foobar
+    class SampleNameSpace::Foo: Foobar
