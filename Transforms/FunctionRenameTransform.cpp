@@ -50,11 +50,17 @@ protected:
 REGISTER_TRANSFORM(FunctionRenameTransform);
 
 void FunctionRenameTransform::HandleTranslationUnit(ASTContext &C)
-{
-	fromFunctionQualifiedName =
-	  TransformRegistry::get().config["FunctionRenameTransform"].begin()->first.as<std::string>();
-  toFunctionName =
-    TransformRegistry::get().config["FunctionRenameTransform"].begin()->second.as<std::string>();
+{  
+  auto CFG = TransformRegistry::get().config["FunctionRename"];
+  
+  if (!CFG.IsMap()) {
+    llvm::errs() << "Error: Cannot find config entry \"FunctionRename\""
+      " or entry is not a map\n";
+    return;
+  }
+  
+	fromFunctionQualifiedName = CFG.begin()->first.as<std::string>();
+  toFunctionName = CFG.begin()->second.as<std::string>();
   
   llvm::errs() << "FunctionRenameTransform, from: " << fromFunctionQualifiedName
     << ", to: "<< toFunctionName << "\n";
