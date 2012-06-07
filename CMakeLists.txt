@@ -32,6 +32,7 @@ SET(Transforms_sources
   FunctionRenameTransform.cpp
   IdentityTransform.cpp
   MethodMoveTransform.cpp
+  RecordFieldRenameTransform.cpp
   Transforms.cpp
   TypeRenameTransform.cpp)
 
