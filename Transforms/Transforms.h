@@ -1,3 +1,6 @@
+#ifndef TRANSFORM_H
+#define TRANSFORM_H
+
 #include <string>
 #include <vector>
 
@@ -57,3 +60,5 @@ public:
 	TransformFactory(transform_creator creator);
 	clang::FrontendAction *create() override;
 };
+
+#endif
