@@ -41,11 +41,11 @@ void RecordFieldRenameTransform::collectAndRenameFieldDecl(DeclContext *DC)
     }
     
     if (auto D = dyn_cast<FieldDecl>(*I)) {
-      llvm::errs() << indent() << "Field: " << D->getQualifiedNameAsString() << "\n";
+      // llvm::errs() << indent() << "Field: " << D->getQualifiedNameAsString() << "\n";
       
       std::string newName;
       if (nameMatches(D, newName)) {
-        llvm::errs() << indent() << "Rename to: " << newName << "\n";
+        // llvm::errs() << indent() << "Rename to: " << newName << "\n";
         renameLocation(D->getLocation(), newName);
       }
     }
@@ -80,12 +80,12 @@ void RecordFieldRenameTransform::processDeclContext(DeclContext *DC)
           if (auto M = (*II)->getAnyMember()) {
             // rename the referenced member
             
-            llvm::errs() << indent() << "Init'er: " << M->getQualifiedNameAsString()
-              << ", at: " << loc(M->getLocation()) << "\n";
+            // llvm::errs() << indent() << "Init'er: " << M->getQualifiedNameAsString()
+            //   << ", at: " << loc(M->getLocation()) << "\n";
             
             std::string newName;
             if (nameMatches(M, newName)) {
-              llvm::errs() << indent() << "Rename to: " << newName << "\n";
+              // llvm::errs() << indent() << "Rename to: " << newName << "\n";
               renameLocation((*II)->getMemberLocation(), newName);
             }            
           }
@@ -137,7 +137,7 @@ void RecordFieldRenameTransform::processStmt(Stmt *S)
   }
 
   pushIndent();
-  llvm::errs() << indent() << "Stmt: " << S->getStmtClassName() << ", at: "<< loc(S->getLocStart()) << "\n";
+  // llvm::errs() << indent() << "Stmt: " << S->getStmtClassName() << ", at: "<< loc(S->getLocStart()) << "\n";
 
   if (auto E = dyn_cast<MemberExpr>(S)) {
     if (auto D = E->getMemberDecl()) {
