@@ -1,6 +1,7 @@
 #include "Transforms.h"
 
 #include <clang/AST/ParentMap.h>
+#include <clang/Lex/Lexer.h>
 #include <clang/Sema/Sema.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -173,8 +174,7 @@ public:
 				else
 				{
 					bool needToInsertBraces = !isa<CompoundStmt>(PM.getParent(top_stmt_within_compound)) && un_op!=top_stmt_within_compound;
-					if(needToInsertBraces)
-						rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), "{\n");
+
 					sstr << base_sstr.str() << "." << setterName << "( ";
 					sstr << base_sstr.str() << "." << getterName << "() ";
 					sstr << (un_op->isIncrementOp()?"+":"-") << " 1)";
@@ -185,15 +185,21 @@ public:
 					}
 					else if(un_op->isPrefix())
 					{
+						rewriter.ReplaceText(un_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
 						rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), sstr.str() + ";\n");
 					}
 					else
 					{
 						assert(un_op->isPostfix());
-						rewriter.InsertTextAfter(top_stmt_within_compound->getLocEnd(), ";\n" + sstr.str());
+						rewriter.ReplaceText(un_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
+						rewriter.InsertTextAfterToken(top_stmt_within_compound->getLocEnd(), ";\n" + sstr.str());
 					}
 					if(needToInsertBraces)
-						rewriter.InsertTextAfter(top_stmt_within_compound->getLocStart(), "}\n");
+					{
+						rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), "{\n");
+						SourceLocation locAfterSemi = Lexer::findLocationAfterToken(top_stmt_within_compound->getLocEnd(), tok::semi, sema->getSourceManager(), sema->getLangOpts(), false);
+						rewriter.InsertTextAfterToken(locAfterSemi, "\n}");
+					}
 				}
 			}
 		}
