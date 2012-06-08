@@ -1,4 +1,6 @@
 ---
+Files:
+  - sqlite3.c
 Transforms:
   # TypeRename:
   #   Types:

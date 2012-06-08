@@ -1,4 +1,6 @@
 ---
+Files:
+  - shell.c
 Transforms:
   # TypeRename:
   #   Types:

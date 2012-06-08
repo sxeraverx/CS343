@@ -1,5 +1,10 @@
 #include "foo.h"
 
+#define w(a, b) a##b
+#define ws wasteCycle
+#define wws ws
+#define call(y, x) do { (void)y; x; } while(0 );
+
 namespace SampleNameSpace {
   int Foo::counter = 0;
 
@@ -13,6 +18,15 @@ namespace SampleNameSpace {
 
 void SampleNameSpace::Foo::doNothing() {
   wasteCycle();
+  
+  // w(waste, Cycle)();
+  // ws();
+  // wws();
+  
+  call(
+    1,
+    wasteCycle()
+  );
   Foo::wasteCycle();
 }
 

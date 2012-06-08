@@ -38,15 +38,18 @@ make
 
 
 # now, our first round of rename
-../../Build/refactorial < forward.yml
-make
-./sqlite3 test.db "select * from test"
-
-# then, the inverse
-../../Build/refactorial < inverse.yml
-make
-./sqlite3 test.db "select * from test"
-diff sqlite3.orig.c sqlite3.c
-diff sqlite3.orig.h sqlite3.h
-diff sqlite3ext.orig.h sqlite3ext.h
-diff shell.orig.c shell.c
+../../Build/refactorial < forward1.yml
+cp sqlite3.orig.h sqlite3.h
+../../Build/refactorial < forward2.yml
+# 
+# make
+# ./sqlite3 test.db "select * from test"
+# 
+# # then, the inverse
+# ../../Build/refactorial < inverse.yml
+# make
+# ./sqlite3 test.db "select * from test"
+# diff sqlite3.orig.c sqlite3.c
+# diff sqlite3.orig.h sqlite3.h
+# diff sqlite3ext.orig.h sqlite3ext.h
+# diff shell.orig.c shell.c
