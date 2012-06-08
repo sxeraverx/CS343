@@ -195,8 +195,16 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
 
             if (NB.isMacroID()) {
               // TODO: emit error
+              llvm::errs() << "Warning: Token is resulted from macro expansion"
+                " and is therefore not renamed, at: " << loc(NB) << "\n";
             }
             else {
+            // TODO: Determine if it's a wrtiable file
+        
+            // TODO: Determine if the location has already been touched or
+            // needs skipping (such as in refactoring API user's code, then
+            // the API headers need no changing since later the new API will be
+            // in place)              
               rewriter.ReplaceText(SourceRange(NB, NE), newName);        
             }
           }

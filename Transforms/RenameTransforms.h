@@ -171,11 +171,28 @@ protected:
           //   #define call(x) x
           //   call(y());   // if we want to rename y()
           L = SM.getSpellingLoc(L);
+          
+          // this falls through to the rename routine below
         }
-        else {        
-          llvm::errs() << "Warning: Token is resulted from macro expansion"
-            " and is therefore not renamed, at: " << loc(L) << "\n";
-          return;
+        else {
+          // if the spelling location is from an actual file that we can
+          // touch, then do the replacement, but show a warning          
+          clang::SourceManager &SM = sema->getSourceManager();
+          auto SL = SM.getSpellingLoc(L);
+          clang::FullSourceLoc FSL(SL, SM);
+          const clang::FileEntry *FE = SM.getFileEntryForID(FSL.getFileID());
+          if (FE) {
+            llvm::errs() << "Warning: Rename attempted as a result of macro "
+                         << "expansion may break things, at: " << loc(L) << "\n";            
+            L = SL;
+            // this falls through to the rename routine below
+          }
+          else {
+            // cannot handle this case
+            llvm::errs() << "Error: Token is resulted from macro expansion"
+              " and is therefore not renamed, at: " << loc(L) << "\n";
+            return;
+          }
         }
       }
       
@@ -184,6 +201,13 @@ protected:
       if (LE.isValid()) {
         // getLocWithOffset returns the location *past* the token, hence -1
         auto E = LE.getLocWithOffset(-1);
+        
+        // TODO: Determine if it's a wrtiable file
+        
+        // TODO: Determine if the location has already been touched or
+        // needs skipping (such as in refactoring API user's code, then
+        // the API headers need no changing since later the new API will be
+        // in place)
         rewriter.ReplaceText(clang::SourceRange(L, E), N);
       }
     }    
