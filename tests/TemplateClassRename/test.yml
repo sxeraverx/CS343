@@ -1,0 +1,7 @@
+---
+Transforms:
+  TypeRename:
+    Ignore:
+      - /usr/.+    
+    Types:
+      - class A::Foo: Foobar

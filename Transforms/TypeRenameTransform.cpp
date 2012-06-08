@@ -9,6 +9,7 @@
 
 #include "Transforms.h"
 #include "RenameTransforms.h"
+#include <clang/AST/DeclTemplate.h>
 
 using namespace clang;
 
@@ -115,6 +116,17 @@ void TypeRenameTransform::collectRenameDecls(DeclContext *DC, bool topLevel)
         renameLocation(L, newName);
       }
     }
+    else if (auto D = dyn_cast<ClassTemplateDecl>(*I)) {
+      auto TD = D->getTemplatedDecl();
+      if (auto RD = dyn_cast<CXXRecordDecl>(TD)) {
+        std::string newName;
+        if (nameMatches(RD, newName)) {
+          renameLocation(L, newName);
+        }
+        
+        collectRenameDecls(RD);
+      }
+    }
 
     // descend into the next level (namespace, etc.)    
     if (auto innerDC = dyn_cast<DeclContext>(*I)) {
@@ -142,7 +154,13 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
       continue;
     }
 
-    if (auto TD = dyn_cast<TagDecl>(*I)) {
+    if (auto D = dyn_cast<ClassTemplateDecl>(*I)) {
+      auto TD = D->getTemplatedDecl();
+      if (auto RD = dyn_cast<CXXRecordDecl>(TD)) {
+        processDeclContext(RD);
+      }
+    }
+    else if (auto TD = dyn_cast<TagDecl>(*I)) {
       if (auto CRD = dyn_cast<CXXRecordDecl>(TD)) {
         // can't call bases_begin() if there's no definition
         if (CRD->hasDefinition()) {        
@@ -183,8 +201,9 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
         // if parent matches
         auto BL = DD->getLocation();
         std::string newName;
-        if (BL.isValid() && DD->getParent()->getLocation() != BL &&
-            nameMatches(DD->getParent(), newName, true)) {
+        auto P = DD->getParent();
+        if (BL.isValid() && P->getLocation() != BL &&
+            nameMatches(P, newName, true)) {
         
           // can't use renameLocation since this is a tricy case        
         
@@ -198,13 +217,21 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
 
           // TODO: Find the right way to do this -- consider this a hack
 
+          // llvm::errs() << indent() << "dtor at: " << loc(BL) << ", locStart: " << loc(DD->getLocStart())
+          //   << ", nameAsString: " << P->getNameAsString() << ", len: " << P->getNameAsString().size()
+          //   << ", DD nameAsString: " << DD->getNameAsString() << ", len: " << DD->getNameAsString().size()
+          //   << "\n";
+            
           if (EL.isValid()) {
             // EL is 1 char after the dtor name ~Foo, so -1 == pos of 'o'
             SourceLocation NE = EL.getLocWithOffset(-1);
             
-            // "~Foo" has length of 4, we want -3 == pos of 'F'
+            // we use the parent's name to see how much we should back off
+            // if we use  D->getNameAsString(), we'd run into two problems:
+            //   (1) the name would be ~Foo
+            //   (2) the name for template class dtor would be ~Foo<T>
             SourceLocation NB =
-              EL.getLocWithOffset(-(int)DD->getNameAsString().size() + 1);
+              EL.getLocWithOffset(-(int)P->getNameAsString().size());
 
             if (NB.isMacroID()) {
               // TODO: emit error
@@ -295,7 +322,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
       if (PLI == PLE) { \
         break; \
       } \
-      if (nameMatches(*I, newName)) { \
+      if (nameMatches(*I, newName, true)) { \
         renameLocation(*PLI, newName); \
       } \
       ++PLI; \
@@ -305,7 +332,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
     else if (auto D = dyn_cast<ObjCCategoryDecl>(*I)) {
       // fix class name
       std::string newName;
-      if (nameMatches(D->getClassInterface(), newName)) {
+      if (nameMatches(D->getClassInterface(), newName, true)) {
         renameLocation(D->getLocation(), newName);
       }
             
@@ -316,7 +343,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
       // fix super class name
       auto SC = D->getSuperClass();
       std::string newName;
-      if (nameMatches(SC, newName)) {
+      if (nameMatches(SC, newName, true)) {
         renameLocation(D->getSuperClassLoc(), newName);
       }
      
@@ -330,7 +357,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
     else if (auto D = dyn_cast<ObjCImplDecl>(*I)) {
       // fix class name
       std::string newName;
-      if (nameMatches(D->getClassInterface(), newName)) {
+      if (nameMatches(D->getClassInterface(), newName, true)) {
         renameLocation(D->getLocation(), newName);
       }      
     }
@@ -382,7 +409,7 @@ void TypeRenameTransform::processStmt(Stmt *S)
   else if (auto E = dyn_cast<ObjCProtocolExpr>(S)) {
     // @protocol(X)
     std::string newName;
-    if (nameMatches(E->getProtocol(), newName)) {
+    if (nameMatches(E->getProtocol(), newName, true)) {
       renameLocation(E->getProtocolIdLoc(), newName);
     }
   }
@@ -437,15 +464,23 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
   pushIndent();
   auto QT = TL.getType();
     
-  // llvm::errs() << indent()
-  //   << "TypeLoc"
-  //   << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
-  //   << "\n" << indent() << "qualType as str: " << QT.getAsString()
-  //   << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
-  //   << "\n";
+  llvm::errs() << indent()
+    << "TypeLoc"
+    << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
+    << "\n" << indent() << "qualType as str: " << QT.getAsString()
+    << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+    << "\n";
     
-  switch(TL.getTypeLocClass()) {
-    
+  switch(TL.getTypeLocClass()) {    
+    case TypeLoc::TypeLocClass::FunctionProto:
+    {
+      if (auto FTL = dyn_cast<FunctionTypeLoc>(&TL)) {
+        for (unsigned I = 0, E = FTL->getNumArgs(); I != E; ++I) {
+          processParmVarDecl(FTL->getArg(I));
+        }
+      }
+      break;
+    }    
     // an elaborated type loc captures the "prefix" of a type
     // for example, the elaborated type loc of "A::B::C" is A::B
     // we need to know if A::B and A are types we are renaming
@@ -458,23 +493,13 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
-    case TypeLoc::TypeLocClass::FunctionProto:
-    {
-      if (auto FTL = dyn_cast<FunctionTypeLoc>(&TL)) {
-        for (unsigned I = 0, E = FTL->getNumArgs(); I != E; ++I) {
-          processParmVarDecl(FTL->getArg(I));
-        }
-      }
-      break;
-    }
-    
     case TypeLoc::TypeLocClass::ObjCObject:
     {
       if (auto OT = dyn_cast<ObjCObjectTypeLoc>(&TL)) {
         for (unsigned I = 0, E = OT->getNumProtocols(); I != E; ++I) {
           if (auto P = OT->getProtocol(I)) {
             std::string newName;
-            if (nameMatches(P, newName)) {
+            if (nameMatches(P, newName, true)) {
               renameLocation(OT->getProtocolLoc(I), newName);
             }
           }
@@ -487,10 +512,21 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     {
       if (auto TSTL = dyn_cast<TemplateSpecializationTypeLoc>(&TL)) {
         
-        // TODO: See if it's the template name that needs renaming
+        // See if it's the template name that needs renaming
+        auto T = TL.getTypePtr();
+        
+        if (auto TT = dyn_cast<TemplateSpecializationType>(T)) {
+          auto TN = TT->getTemplateName();
+          auto TD = TN.getAsTemplateDecl();
+          auto TTD = TD->getTemplatedDecl();
+
+          std::string newName;
+          if (nameMatches(TTD, newName, true)) {
+            renameLocation(TSTL->getTemplateNameLoc(), newName);
+          }
+        }
 
         // iterate through the args
-
         for (unsigned I = 0, E = TSTL->getNumArgs(); I != E; ++I) {
           
           // need to see if the template argument is also a type
