@@ -95,6 +95,14 @@ void TypeRenameTransform::collectRenameDecls(DeclContext *DC, bool topLevel)
         renameLocation(L, newName);
       }
     }
+    else if (auto D = dyn_cast<ObjCContainerDecl>(*I)) {
+      // Objective-C containers (@interface, @implementation incl. categories,
+      // @protocol)
+      std::string newName;
+      if (nameMatches(D, newName)) {
+        renameLocation(L, newName);
+      }      
+    }
     else if (auto D = dyn_cast<TypedefDecl>(*I)) {
       // typedef T n -- we want to see first if it's n that needs renaming
       std::string newName;

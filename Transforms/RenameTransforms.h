@@ -101,7 +101,7 @@ protected:
     if (checkOnly) {
       return false;
     }
-
+    
     if (!D->getLocation().isValid()) {
       return false;
     }
@@ -242,6 +242,17 @@ protected:
     std::string src;
     llvm::raw_string_ostream sst(src);
     L.print(sst, sema->getSourceManager());
+    return sst.str();
+  }
+  
+  std::string range(clang::SourceRange R) {
+    std::string src;
+    llvm::raw_string_ostream sst(src);
+    sst << "(";
+    R.getBegin().print(sst, sema->getSourceManager());
+    sst << ", ";
+    R.getEnd().print(sst, sema->getSourceManager());
+    sst << ")";
     return sst.str();
   }
   

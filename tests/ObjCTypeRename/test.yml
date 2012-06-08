@@ -1,0 +1,9 @@
+---
+Transforms:
+  TypeRename:
+    Ignore:
+      - /usr/include/.*
+      - /System/.*
+      - /Library/.*
+    Types:
+      - Foo: Foobar
