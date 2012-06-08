@@ -42,7 +42,7 @@ void RecordFieldRenameTransform::collectAndRenameFieldDecl(DeclContext *DC,
     }
     
     if (auto D = dyn_cast<FieldDecl>(*I)) {
-      // llvm::errs() << indent() << "Field: " << D->getQualifiedNameAsString() << "\n";
+      // llvm::errs() << indent() << "Field: " << D->getQualifiedNameAsString() << ", at:" << loc(L) << "\n";
       
       std::string newName;
       if (nameMatches(D, newName)) {
@@ -84,12 +84,15 @@ void RecordFieldRenameTransform::processDeclContext(DeclContext *DC,
             
             // llvm::errs() << indent() << "Init'er: " << M->getQualifiedNameAsString()
             //   << ", at: " << loc(M->getLocation()) << "\n";
-            
-            std::string newName;
-            if (nameMatches(M, newName, true)) {
-              // llvm::errs() << indent() << "Rename to: " << newName << "\n";
-              renameLocation((*II)->getMemberLocation(), newName);
-            }            
+
+            // only when it's not an implicit init.er
+            if ((*II)->getMemberLocation() != BL) {            
+              std::string newName;
+              if (nameMatches(M, newName, true)) {
+                // llvm::errs() << indent() << "Rename to: " << newName << "\n";
+                renameLocation((*II)->getMemberLocation(), newName);
+              }
+            }
           }
           
           if (auto X = (*II)->getInit()) {
