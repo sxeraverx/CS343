@@ -153,7 +153,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
         auto BL = CD->getLocation();
         std::string newName;
         if (BL.isValid() && CD->getParent()->getLocation() != BL && 
-            nameMatches(CD->getParent(), newName)) {
+            nameMatches(CD->getParent(), newName, true)) {
           renameLocation(BL, newName);
         }
         
@@ -171,7 +171,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
         auto BL = DD->getLocation();
         std::string newName;
         if (BL.isValid() && DD->getParent()->getLocation() != BL &&
-            nameMatches(DD->getParent(), newName)) {
+            nameMatches(DD->getParent(), newName, true)) {
         
           // can't use renameLocation since this is a tricy case        
         
@@ -414,7 +414,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       if (auto TDT = dyn_cast<TypedefType>(T)) {
         auto TDD = TDT->getDecl();
         std::string newName;
-        if (nameMatches(TDD, newName)) {
+        if (nameMatches(TDD, newName, true)) {
           renameLocation(BL, newName);
         }
       }
@@ -439,7 +439,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       std::string newName;      
       if (auto TT = dyn_cast<TagType>(TL.getTypePtr())) {
         auto TD = TT->getDecl();
-        if (nameMatches(TD, newName)) {
+        if (nameMatches(TD, newName, true)) {
           renameLocation(BL, newName);          
         }
       }

@@ -152,18 +152,22 @@ void FunctionRenameTransform::processStmt(Stmt *S)
   if (auto E = dyn_cast<MemberExpr>(S)) {
     // handle the case for member references (e.g. calling foo(), A::foo())
     if (auto D = E->getMemberDecl()) {
-      std::string newName;
-      if (nameMatches(D, newName)) {
-        renameLocation(E->getMemberLoc(), newName);
+      if (dyn_cast<FunctionDecl>(D)) {
+        std::string newName;
+        if (nameMatches(D, newName, true)) {
+          renameLocation(E->getMemberLoc(), newName);
+        }
       }
     }
   }
   else if (auto E = dyn_cast<DeclRefExpr>(S)) {
     // handle C function calls
     if (auto D = E->getDecl()) {
-      std::string newName;
-      if (nameMatches(D, newName)) {
-        renameLocation(E->getLocation(), newName);
+      if (dyn_cast<FunctionDecl>(D)) {
+        std::string newName;
+        if (nameMatches(D, newName, true)) {
+          renameLocation(E->getLocation(), newName);
+        }
       }
     }
   }

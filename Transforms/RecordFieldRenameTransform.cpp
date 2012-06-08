@@ -86,7 +86,7 @@ void RecordFieldRenameTransform::processDeclContext(DeclContext *DC,
             //   << ", at: " << loc(M->getLocation()) << "\n";
             
             std::string newName;
-            if (nameMatches(M, newName)) {
+            if (nameMatches(M, newName, true)) {
               // llvm::errs() << indent() << "Rename to: " << newName << "\n";
               renameLocation((*II)->getMemberLocation(), newName);
             }            
@@ -144,7 +144,7 @@ void RecordFieldRenameTransform::processStmt(Stmt *S)
   if (auto E = dyn_cast<MemberExpr>(S)) {
     if (auto D = E->getMemberDecl()) {
       std::string newName;
-      if (nameMatches(D, newName)) {
+      if (nameMatches(D, newName, true)) {
         renameLocation(E->getMemberLoc(), newName);
       }
     }
@@ -152,7 +152,7 @@ void RecordFieldRenameTransform::processStmt(Stmt *S)
   else if (auto E = dyn_cast<DeclRefExpr>(S)) {
     if (auto D = E->getDecl()) {
       std::string newName;
-      if (nameMatches(D, newName)) {
+      if (nameMatches(D, newName, true)) {
         renameLocation(E->getLocation(), newName);
       }
     }

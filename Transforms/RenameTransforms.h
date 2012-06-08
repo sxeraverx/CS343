@@ -164,17 +164,27 @@ protected:
     if (L.isValid()) {
       if (L.isMacroID()) {        
         // TODO: emit error using diagnostics
-        llvm::errs() << "Warning: Token is resulted from macro expansion"
-          " and is therefore not renamed, at: " << loc(L) << "\n";
-      }
-      else {
-        clang::Preprocessor &P = sema->getPreprocessor();      
-        auto LE = P.getLocForEndOfToken(L);
-        if (LE.isValid()) {
-          // getLocWithOffset returns the location *past* the token, hence -1
-          auto E = LE.getLocWithOffset(-1);
-          rewriter.ReplaceText(clang::SourceRange(L, E), N);
+        clang::SourceManager &SM = sema->getSourceManager();
+        if (SM.isMacroArgExpansion(L) || SM.isInSystemMacro(L)) {
+          // see if it's the macro expansion we can handle
+          // e.g.
+          //   #define call(x) x
+          //   call(y());   // if we want to rename y()
+          L = SM.getSpellingLoc(L);
         }
+        else {        
+          llvm::errs() << "Warning: Token is resulted from macro expansion"
+            " and is therefore not renamed, at: " << loc(L) << "\n";
+          return;
+        }
+      }
+      
+      clang::Preprocessor &P = sema->getPreprocessor();      
+      auto LE = P.getLocForEndOfToken(L);
+      if (LE.isValid()) {
+        // getLocWithOffset returns the location *past* the token, hence -1
+        auto E = LE.getLocWithOffset(-1);
+        rewriter.ReplaceText(clang::SourceRange(L, E), N);
       }
     }    
   }
