@@ -1,8 +1,16 @@
 #!/bin/sh
-export FROM_TYPE_QUALIFIED_NAME="class A::Foo"
-export TO_TYPE_NAME="Foobar"
-cd ../../
+cp foo.orig.h foo.h
+cp foo.orig.cpp foo.cpp
+clang -c foo.cpp
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .
+make
+
+mkdir -p ../../Build
+cd ../../Build/
+cmake ../
 make
 cd -
-cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .
-../../refactorial foo.cpp
+
+../../Build/refactorial < test.yml
+touch foo.h foo.cpp
+make

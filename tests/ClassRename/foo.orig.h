@@ -3,7 +3,7 @@
 namespace A {
   class X {
   public:
-    virtual ~X();
+    virtual ~X() {}
   };
   
   class Foo : public X {

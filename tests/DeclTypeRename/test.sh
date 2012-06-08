@@ -11,4 +11,5 @@ make
 cd -
 
 ../../Build/refactorial < test.yml
+touch foo.h foo.cpp
 make

@@ -1,0 +1,7 @@
+---
+Transforms:
+  TypeRename:
+    Types:
+      - class A::X: XY
+      - class A::Foo: Foobar
+      - class .+::(N.+): El\1
