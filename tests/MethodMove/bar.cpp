@@ -3,7 +3,7 @@
 
 namespace A {
 namespace MyNameSpace {
-	Foo::Baz(int x, int y) {
+	Foo::Foo(int x, int y) {
 		a = x + y;
 	}
 };

@@ -12,26 +12,26 @@ namespace A {
 namespace MyNameSpace {
     using namespace C;
     
-	class Baz {
+	class Foo {
 	protected:
         class Inner {};
 	private:
 		int a;
 		int b;
 	public:
-		Baz() {
+		Foo() {
             blah();
 			a = 5;
 			b = 4;
 		}
         
-		Baz(int x) : a(x) { b = 3; }
+		Foo(int x) : a(x) { b = 3; }
 		
-		Baz(const int* x) : a(*x), b(*x + 1) {}
+		Foo(const int* x) : a(*x), b(*x + 1) {}
         
-		Baz(int x, int y);
+		Foo(int x, int y);
         
-		virtual ~Baz() {
+		virtual ~Foo() {
 			a = 0;
 		}
         
@@ -75,7 +75,7 @@ namespace MyNameSpace {
 		}
 	};
     
-	class Bar : Baz {
+	class Bar : Foo {
 	public:
 		virtual void vtest() {
 		}        
