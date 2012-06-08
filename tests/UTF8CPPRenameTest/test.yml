@@ -1,0 +1,8 @@
+---
+Transforms:
+  TypeRename:
+    Ignore:
+      - /usr/.+    
+    Types:
+      - class utf8::iterator: UIterator
+
