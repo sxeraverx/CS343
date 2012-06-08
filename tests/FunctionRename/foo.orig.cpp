@@ -1,4 +1,4 @@
-#include "Foo.h"
+#include "foo.h"
 
 namespace SampleNameSpace {
   int Foo::counter = 0;

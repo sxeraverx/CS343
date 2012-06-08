@@ -1,0 +1,8 @@
+---
+Transforms:
+  RecordFieldRename:
+    Ignore:
+      - /usr/include/.*
+    Fields:
+      - MyNamespace::Foo::index: i
+      - MyNamespace::Foo::m_(.+): _\1

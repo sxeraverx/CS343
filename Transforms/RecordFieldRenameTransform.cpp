@@ -11,8 +11,8 @@ public:
   virtual void HandleTranslationUnit(ASTContext &) override;
   
 protected:
-  void collectAndRenameFieldDecl(DeclContext *DC);
-  void processDeclContext(DeclContext *DC);  
+  void collectAndRenameFieldDecl(DeclContext *DC, bool topLevel = false);
+  void processDeclContext(DeclContext *DC, bool topLevel = false);  
   void processStmt(Stmt *S);
 };
 
@@ -26,17 +26,18 @@ void RecordFieldRenameTransform::HandleTranslationUnit(ASTContext &C)
   }
   
   auto TUD = C.getTranslationUnitDecl();  
-  collectAndRenameFieldDecl(TUD);
-  processDeclContext(TUD);
+  collectAndRenameFieldDecl(TUD, true);
+  processDeclContext(TUD, true);
 }
 
-void RecordFieldRenameTransform::collectAndRenameFieldDecl(DeclContext *DC)
+void RecordFieldRenameTransform::collectAndRenameFieldDecl(DeclContext *DC,
+                                                           bool topLevel)
 {
   pushIndent();
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
     auto L = (*I)->getLocation();
-    if (shouldIgnore(L)) {
+    if (topLevel && shouldIgnore(L)) {
       continue;
     }
     
@@ -58,7 +59,8 @@ void RecordFieldRenameTransform::collectAndRenameFieldDecl(DeclContext *DC)
   popIndent();  
 }
 
-void RecordFieldRenameTransform::processDeclContext(DeclContext *DC)
+void RecordFieldRenameTransform::processDeclContext(DeclContext *DC,
+                                                    bool topLevel)
 {  
   // TODO: Skip globally touched locations
   // if a.cpp and b.cpp both include c.h, then once a.cpp is processed,
@@ -68,7 +70,7 @@ void RecordFieldRenameTransform::processDeclContext(DeclContext *DC)
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
     auto L = (*I)->getLocation();
-    if (shouldIgnore(L)) {
+    if (topLevel && shouldIgnore(L)) {
       continue;
     }
   
