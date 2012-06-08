@@ -8,6 +8,14 @@ namespace A {
     
     ~ Foo() {}
     
+    void test(Foo& x) {
+      first = x.first;
+    }
+    
+    void test2(Foo<T1, T2>& x) {
+      second = x.second;
+    }
+    
     T1 first;
     T2 second;
     typedef Foo<T1, T2>** PtrPtr;

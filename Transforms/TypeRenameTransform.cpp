@@ -508,6 +508,18 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
+    case TypeLoc::TypeLocClass::InjectedClassName:
+    {
+      if (auto TSTL = dyn_cast<InjectedClassNameTypeLoc>(&TL)) {
+        auto CD = TSTL->getDecl();
+        std::string newName;
+        if (nameMatches(CD, newName, true)) {
+          renameLocation(BL, newName);          
+        }      
+      }
+      break;
+    }
+    
     case TypeLoc::TypeLocClass::TemplateSpecialization:
     {
       if (auto TSTL = dyn_cast<TemplateSpecializationTypeLoc>(&TL)) {
@@ -566,7 +578,6 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     case TypeLoc::TypeLocClass::Builtin:
     case TypeLoc::TypeLocClass::Enum:    
     case TypeLoc::TypeLocClass::Record:
-    case TypeLoc::TypeLocClass::InjectedClassName:
     case TypeLoc::TypeLocClass::ObjCInterface:
     case TypeLoc::TypeLocClass::TemplateTypeParm:
     {
