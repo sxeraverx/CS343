@@ -1,5 +1,0 @@
----
-Transforms:
-  TypeRename:
-    Types:
-      - class SampleNameSpace::Foo: Foobar

@@ -9,5 +9,5 @@ cd ../../Build/
 cmake ../
 make
 cd -
-../../Build/refactorial < refax.yml
+../../Build/refactorial < test.yml
 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .

@@ -1,6 +1,6 @@
 #include "foo.h"
-// #include <vector>
-// #include <map>
+#include <vector>
+#include <map>
 
 namespace Blah {
   typedef A::Foo Z;
@@ -57,15 +57,15 @@ int main()
   AF* h = &g;
   AFP i = h;
   
-  // std::vector<A::Foo> j;
-  // std::pair<int, A::Foo> k;
-  // std::pair<A::Foo, float> l;
-  // std::pair<A::Foo, A::Foo> m;
-  // std::pair<A::Foo, std::pair<int, A::Foo> > n;
+  std::vector<A::Foo> j;
+  std::pair<int, A::Foo> k;
+  std::pair<A::Foo, float> l;
+  std::pair<A::Foo, A::Foo> m;
+  std::pair<A::Foo, std::pair<int, A::Foo> > n;
   
-  Blah(Foo) o;
-  Poo p;
-  Poo* q;  
+  // Blah(Foo) o;
+  // Poo p;
+  // Poo* q;  
 }
 
 using namespace A;
@@ -78,11 +78,11 @@ void test()
   const Foo *td = tb;
   Foo &te = ta;
   Foo *tf = new Foo;
-  // std::vector<Foo> j;
-  // std::pair<int, Foo> k;
-  // std::pair<Foo, float> l;
-  // std::pair<Foo, Foo> m;
-  // std::pair<Foo, std::pair<int, Foo> > n;  
+  std::vector<Foo> j;
+  std::pair<int, Foo> k;
+  std::pair<Foo, float> l;
+  std::pair<Foo, Foo> m;
+  std::pair<Foo, std::pair<int, Foo> > n;  
   ta = Foo(5);
   void *tg = tf;
   Foo *th = (Foo *)tg;
@@ -91,7 +91,7 @@ void test()
     Foo b;
   };
   
-  Blah::Z x;
+  // Blah::Z x;
   A::Test y = B;
 }
 
