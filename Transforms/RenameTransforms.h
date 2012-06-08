@@ -87,6 +87,7 @@ protected:
     return false;
   }
   
+  // if we have a NamedDecl and the fully-qualified name matches
   bool nameMatches(const clang::NamedDecl *D, std::string &outNewName,
                    bool checkOnly = false) {
     auto I = nameMap.find(D);
@@ -101,7 +102,23 @@ protected:
       return false;
     }
 
+    if (!D->getLocation().isValid()) {
+      return false;
+    }
+        
     auto QN = D->getQualifiedNameAsString();
+    if (QN.size() == 0) {
+      return false;
+    }
+    
+    // special handling for TagDecl
+    if (auto T = llvm::dyn_cast<clang::TagDecl>(D)) {
+      auto KN = T->getKindName();
+      assert(KN && "getKindName() must return a non-NULL value");
+      QN.insert(0, KN);
+      QN.insert(strlen(KN), " ");
+    }
+    
     for (auto I = renameList.begin(), E = renameList.end(); I != E; ++I) {
       if (I->first.FullMatch(QN)) {
         std::string newName;
@@ -112,6 +129,34 @@ protected:
       }
     }
   
+    return false;
+  }
+  
+  // useful when we can't just rely on Decl, e.g. built-in type
+  // unmatched names are cached to speed things up
+  bool stringMatches(std::string name, std::string &outNewName) {
+    auto I = matchedStringMap.find(name);
+    if (I != matchedStringMap.end()) {
+      outNewName = (*I).second;
+      return true;
+    }
+
+    auto J = unmatchedStringSet.find(name);
+    if (J != unmatchedStringSet.end()) {
+      return false;
+    }
+
+    for (auto I = renameList.begin(), E = renameList.end(); I != E; ++I) {
+      if (I->first.FullMatch(name)) {
+        std::string newName;
+        I->first.Extract(I->second, name, &newName);
+        matchedStringMap[name] = newName;
+        outNewName = newName;
+        return true;
+      }
+    }
+    
+    unmatchedStringSet.insert(name);
     return false;
   }
   
@@ -164,7 +209,9 @@ private:
   typedef std::pair<pcrecpp::RE, std::string> REStringPair;
   std::vector<REStringPair> renameList;
 
-  std::map<const clang::Decl *, std::string> nameMap;  
+  std::map<const clang::Decl *, std::string> nameMap;
+  std::map<std::string, std::string> matchedStringMap;
+  std::set<std::string> unmatchedStringSet;
 };
 
 #endif

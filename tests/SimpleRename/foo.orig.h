@@ -1,5 +1,11 @@
 
 namespace SampleNameSpace {
+  class Foo;
+  
+  struct FooNode {
+    Foo *next;
+  };
+  
   class Foo {
   private:
     static int counter;

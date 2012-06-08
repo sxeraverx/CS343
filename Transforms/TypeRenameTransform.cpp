@@ -3,7 +3,7 @@
 //
 
 #include "Transforms.h"
-#include <clang/Lex/Preprocessor.h>
+#include "RenameTransforms.h"
 
 using namespace clang;
 
@@ -15,17 +15,13 @@ using namespace clang;
 // qualified name)
 // issue: what about forward-decl'd types (class A; A* b;) ? 
 
-class TypeRenameTransform : public Transform {
+class TypeRenameTransform : public RenameTransform {
 public:
-  TypeRenameTransform() : indentLevel(0) {}
-
   virtual void HandleTranslationUnit(ASTContext &C) override;
   
 protected:
-  std::string fromTypeQualifiedName;
-  std::string toTypeName;
-
-  void processDeclContext(DeclContext *DC);  
+  void collectRenameDecls(DeclContext *DC, bool topLevel = false);
+  void processDeclContext(DeclContext *DC, bool topLevel = false);  
   void processStmt(Stmt *S);
   
   // forceRewriteMacro is needed to handle expressions like VAArgExpr
@@ -37,34 +33,11 @@ protected:
   void processParmVarDecl(ParmVarDecl *P);
   bool tagNameMatches(TagDecl *T);
   
-  // TODO: Move these to a utility
 private:
-  int indentLevel;
-  
-  std::string indent() {
-    return std::string(indentLevel, '\t');
-  }
-  
-  void pushIndent() {
-    indentLevel++;
-  }
-  
-  void popIndent() {
-    indentLevel--;
-  }
-  
-  std::string loc(SourceLocation L) {
-    std::string src;
-    llvm::raw_string_ostream sst(src);
-    L.print(sst, sema->getSourceManager());
-    return sst.str();
-  }
-  
   // a quick way to get the whole TypeLocClass tree
-  std::string typeLocClassName(TypeLoc::TypeLocClass C) {
+  static std::string typeLocClassName(TypeLoc::TypeLocClass C) {
     std::string src;
     llvm::raw_string_ostream sst(src);
-    
 
 // will be undefined by clang/AST/TypeNodes.def
 #define ABSTRACT_TYPE(Class, Base)
@@ -90,24 +63,58 @@ REGISTER_TRANSFORM(TypeRenameTransform);
 
 void TypeRenameTransform::HandleTranslationUnit(ASTContext &C)
 {
-  // TODO: Temporary measure of config
-  
-	fromTypeQualifiedName = TransformRegistry::get().config["TypeRename"].begin()->first.as<std::string>();
-	toTypeName = TransformRegistry::get().config["TypeRename"].begin()->second.as<std::string>();
-  
-  
-  llvm::errs() << "TypeRenameTransform, from: " << fromTypeQualifiedName
-    << ", to: "<< toTypeName << "\n";
+  auto I = loadConfig("TypeRename", "Types");
+  if (!I) {
+    return;
+  }
 
   auto TUD = C.getTranslationUnitDecl();
-  processDeclContext(TUD);
+  collectRenameDecls(TUD, true);
+  processDeclContext(TUD, true);
+}
+
+void TypeRenameTransform::collectRenameDecls(DeclContext *DC, bool topLevel)
+{
+  // TODO: Skip globally touched locations
+  //
+  // if a.cpp and b.cpp both include c.h, then once a.cpp is processed,
+  // we cas skip any location that is not in b.cpp
+  //
+  
+  pushIndent();
+  
+  for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
+    auto L = (*I)->getLocation();
+    if (topLevel && shouldIgnore(L)) {
+      continue;
+    }
+    
+    if (auto TD = dyn_cast<TagDecl>(*I)) {
+      std::string newName;
+      if (nameMatches(TD, newName)) {
+        renameLocation(L, newName);
+      }
+    }
+    else if (auto D = dyn_cast<TypedefDecl>(*I)) {
+      // typedef T n -- we want to see first if it's n that needs renaming
+      std::string newName;
+      if (nameMatches(D, newName)) {
+        renameLocation(L, newName);
+      }
+    }
+
+    // descend into the next level (namespace, etc.)    
+    if (auto innerDC = dyn_cast<DeclContext>(*I)) {
+      collectRenameDecls(innerDC);
+    }
+  }
+  popIndent();  
 }
 
 // TODO: A special case for top-level decl context
 // (because we can quickly skip system/refactored nodes there)
-void TypeRenameTransform::processDeclContext(DeclContext *DC)
+void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
 {  
-  // TODO: ignore system headers (/usr, /opt, /System and /Library)
   // TODO: Skip globally touched locations
   //
   // if a.cpp and b.cpp both include c.h, then once a.cpp is processed,
@@ -117,25 +124,12 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
   pushIndent();
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
-    if (auto TD = dyn_cast<TagDecl>(*I)) {
-      
-      // handle tag decls (enum, struct, union, class)
-      Preprocessor &P = sema->getPreprocessor();
-      auto BL = TD->getLocation();
-      
-      if (BL.isValid() && tagNameMatches(TD)) {    
-        if (BL.isMacroID()) {
-          // TODO: emit error
-        }
-        else {
-          auto BLE = P.getLocForEndOfToken(BL);
-          if (BLE.isValid()) {
-            auto EL = BLE.getLocWithOffset(-1);
-            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
-          }
-        }
-      }
+    auto L = (*I)->getLocation();
+    if (topLevel && shouldIgnore(L)) {
+      continue;
+    }
 
+    if (auto TD = dyn_cast<TagDecl>(*I)) {
       if (auto CRD = dyn_cast<CXXRecordDecl>(TD)) {
         // can't call bases_begin() if there's no definition
         if (CRD->hasDefinition()) {        
@@ -157,20 +151,10 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       // handle ctor name initializers
       if (auto CD = dyn_cast<CXXConstructorDecl>(D)) {
         auto BL = CD->getLocation();
-
+        std::string newName;
         if (BL.isValid() && CD->getParent()->getLocation() != BL && 
-            tagNameMatches(CD->getParent())) {
-          Preprocessor &P = sema->getPreprocessor();
-          if (BL.isMacroID()) {
-            // TODO: emit error
-          }
-          else {
-            auto BLE = P.getLocForEndOfToken(BL); 
-            if (BLE.isValid()) {
-              auto EL = BLE.getLocWithOffset(-1);
-              rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);        
-            }
-          }
+            nameMatches(CD->getParent(), newName)) {
+          renameLocation(BL, newName);
         }
         
         for (auto II = CD->init_begin(), IE = CD->init_end(); II != IE; ++II) {
@@ -184,9 +168,12 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       // dtor
       if (auto DD = dyn_cast<CXXDestructorDecl>(D)) {
         // if parent matches
-        auto BL = DD->getLocation();        
+        auto BL = DD->getLocation();
+        std::string newName;
         if (BL.isValid() && DD->getParent()->getLocation() != BL &&
-            tagNameMatches(DD->getParent())) {
+            nameMatches(DD->getParent(), newName)) {
+        
+          // can't use renameLocation since this is a tricy case        
         
           // need to use raw_identifier because Lexer::findLocationAfterToken
           // performs a raw lexing
@@ -210,7 +197,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
               // TODO: emit error
             }
             else {
-              rewriter.ReplaceText(SourceRange(NB, NE), toTypeName);        
+              rewriter.ReplaceText(SourceRange(NB, NE), newName);        
             }
           }
         }
@@ -248,29 +235,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC)
       processQualifierLoc(D->getQualifierLoc());      
     }
     else if (auto D = dyn_cast<TypedefDecl>(*I)) {
-      // typedef T n -- we want to see first if it's n that needs renaming
-      Preprocessor &P = sema->getPreprocessor();      
-      auto BL = D->getLocation();
-      
-      if (BL.isValid()) {
-        auto BLE = P.getLocForEndOfToken(BL); 
-        
-        if (BLE.isValid()) {        
-          auto EL = BLE.getLocWithOffset(-1);
-          auto QTNS = D->getQualifiedNameAsString();
-
-          if (QTNS == fromTypeQualifiedName) {
-            if (BL.isMacroID()) {
-              // TODO: emit error
-            }
-            else {
-              rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
-            }
-          }
-        }
-      }
-
-      // then we handle the case of T
+      // typedef T n, handle the case of T
       if (auto TSI = D->getTypeSourceInfo()) {
         processTypeLoc(TSI->getTypeLoc());
       }
@@ -448,19 +413,13 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       auto T = TL.getTypePtr();
       if (auto TDT = dyn_cast<TypedefType>(T)) {
         auto TDD = TDT->getDecl();
-      
-        if (TDD->getQualifiedNameAsString() == fromTypeQualifiedName) {
-          Preprocessor &P = sema->getPreprocessor();
-          auto BLE = P.getLocForEndOfToken(BL);
-          if (BLE.isValid()) {
-            auto EL = BLE.getLocWithOffset(-1);
-            rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
-            break; // do
-          }
+        std::string newName;
+        if (nameMatches(TDD, newName)) {
+          renameLocation(BL, newName);
         }
       }
       
-      break; // case
+      break;
     }
     
     // leaf types
@@ -476,28 +435,17 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       // skip if it's an anonymous type
       // read Clang`s definition (in RecordDecl) -- not exactly what you think
       // so we use the length of name
-      
+
+      std::string newName;      
       if (auto TT = dyn_cast<TagType>(TL.getTypePtr())) {
         auto TD = TT->getDecl();
-        if (TD->getNameAsString().size() == 0) {
-          break; // bail out from the case
-        }
-        
-        // also, if it's the same loc as the decl's, we must skip it
-        // (implying it has already been renamed by processDeclContext)
-        if (TD->getLocation() == BL) {
-          break; // bail out from the case          
+        if (nameMatches(TD, newName)) {
+          renameLocation(BL, newName);          
         }
       }
-      
-      // TODO: Correct way of comparing type?
-      if (QT.getAsString() == fromTypeQualifiedName) {
-        
-        Preprocessor &P = sema->getPreprocessor();
-        auto BLE = P.getLocForEndOfToken(BL);
-        if (BLE.isValid()) {
-          auto EL = BLE.getLocWithOffset(-1);
-          rewriter.ReplaceText(SourceRange(BL, EL), toTypeName);
+      else {
+        if (stringMatches(QT.getAsString(), newName)) {
+          renameLocation(BL, newName);
         }
       }
       break;
@@ -538,18 +486,4 @@ void TypeRenameTransform::processParmVarDecl(ParmVarDecl *P)
   if (P->hasInit()) {
     processStmt(P->getInit());
   }  
-}
-
-bool TypeRenameTransform::tagNameMatches(TagDecl *T)
-{
-  auto BL = T->getLocation();
-  if (!BL.isValid()) {
-    return false;
-  }
-
-  auto QTNS = T->getQualifiedNameAsString();
-  std::string fullName = T->getKindName();
-  fullName += " ";
-  fullName += QTNS;
-  return fullName == fromTypeQualifiedName;
 }

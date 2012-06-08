@@ -9,11 +9,11 @@ using namespace clang;
 class RecordFieldRenameTransform : public RenameTransform {
 public:
   virtual void HandleTranslationUnit(ASTContext &) override;
+  
+protected:
   void collectAndRenameFieldDecl(DeclContext *DC);
   void processDeclContext(DeclContext *DC);  
   void processStmt(Stmt *S);
-  
-protected:
 };
 
 REGISTER_TRANSFORM(RecordFieldRenameTransform);
