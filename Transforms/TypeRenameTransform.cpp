@@ -2,6 +2,11 @@
 // TypeRenameTransform.cpp: Rename C/C++/Objective-C/Objective-C++ Types
 //
 
+//
+// Limitations:
+// * No Objective-C category rename
+// * No Y, Z part for @implementation X (C) : Y <Z> -- perhaps you shouldn't
+
 #include "Transforms.h"
 #include "RenameTransforms.h"
 
@@ -282,8 +287,53 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
       }
     }
     
-    // TODO: Handle ObjC interface/impl, inheritance, protocol
-    // TODO: Whether we should support category rename?
+#define FIX_PROTOCOL(D) do { \
+    std::string newName; \
+    auto PLI = D->protocol_loc_begin(); \
+    auto PLE = D->protocol_loc_end(); \
+    for (auto I = D->protocol_begin(), E = D->protocol_end(); I != E; ++I) { \
+      if (PLI == PLE) { \
+        break; \
+      } \
+      if (nameMatches(*I, newName)) { \
+        renameLocation(*PLI, newName); \
+      } \
+      ++PLI; \
+    } \
+  } while(0)
+  
+    else if (auto D = dyn_cast<ObjCCategoryDecl>(*I)) {
+      // fix class name
+      std::string newName;
+      if (nameMatches(D->getClassInterface(), newName)) {
+        renameLocation(D->getLocation(), newName);
+      }
+            
+      // fix protocols
+      FIX_PROTOCOL(D);
+    }
+    else if (auto D = dyn_cast<ObjCInterfaceDecl>(*I)) {
+      // fix super class name
+      auto SC = D->getSuperClass();
+      std::string newName;
+      if (nameMatches(SC, newName)) {
+        renameLocation(D->getSuperClassLoc(), newName);
+      }
+     
+      // fix protocols
+      FIX_PROTOCOL(D);      
+    }
+    else if (auto D = dyn_cast<ObjCProtocolDecl>(*I)) {
+      // fix protocols
+      FIX_PROTOCOL(D);      
+    }
+    else if (auto D = dyn_cast<ObjCImplDecl>(*I)) {
+      // fix class name
+      std::string newName;
+      if (nameMatches(D->getClassInterface(), newName)) {
+        renameLocation(D->getLocation(), newName);
+      }      
+    }
 
     // descend into the next level (namespace, etc.)    
     if (auto innerDC = dyn_cast<DeclContext>(*I)) {
@@ -315,8 +365,7 @@ void TypeRenameTransform::processStmt(Stmt *S)
     processTypeLoc(E->getTypeInfoAsWritten()->getTypeLoc());  
   }
   else if (auto E = dyn_cast<CXXTemporaryObjectExpr>(S)) {
-    auto TSI = E->getTypeSourceInfo();
-    if (TSI) {
+    if (auto TSI = E->getTypeSourceInfo()) {
       processTypeLoc(TSI->getTypeLoc());  
     }
   }
@@ -330,9 +379,28 @@ void TypeRenameTransform::processStmt(Stmt *S)
       processTypeLoc(E->getArgumentTypeInfo()->getTypeLoc());  
     }
   }
+  else if (auto E = dyn_cast<ObjCProtocolExpr>(S)) {
+    // @protocol(X)
+    std::string newName;
+    if (nameMatches(E->getProtocol(), newName)) {
+      renameLocation(E->getProtocolIdLoc(), newName);
+    }
+  }
+  else if (auto E = dyn_cast<ObjCEncodeExpr>(S)) {
+    // @encode(X)
+    if (auto TSI = E->getEncodedTypeSourceInfo()) {
+      processTypeLoc(TSI->getTypeLoc());  
+    }    
+  }
+  else if (auto E = dyn_cast<ObjCMessageExpr>(S)) {
+    // handle the case where [X alloc] and X in a type we want to rename
+    if (E->getReceiverKind() == ObjCMessageExpr::Class) {
+      if (auto TSI = E->getClassReceiverTypeInfo()) {
+        processTypeLoc(TSI->getTypeLoc());  
+      }          
+    }
+  }
   else {
-    // TODO: Objective-C method call
-    // TODO: Objective-C @encode, @protocol etc.
     // TODO: Fill in other Stmt/Expr that has type info
     // TODO: Verify correctness and furnish test cases
   }
@@ -395,6 +463,21 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       if (auto FTL = dyn_cast<FunctionTypeLoc>(&TL)) {
         for (unsigned I = 0, E = FTL->getNumArgs(); I != E; ++I) {
           processParmVarDecl(FTL->getArg(I));
+        }
+      }
+      break;
+    }
+    
+    case TypeLoc::TypeLocClass::ObjCObject:
+    {
+      if (auto OT = dyn_cast<ObjCObjectTypeLoc>(&TL)) {
+        for (unsigned I = 0, E = OT->getNumProtocols(); I != E; ++I) {
+          if (auto P = OT->getProtocol(I)) {
+            std::string newName;
+            if (nameMatches(P, newName)) {
+              renameLocation(OT->getProtocolLoc(I), newName);
+            }
+          }
         }
       }
       break;

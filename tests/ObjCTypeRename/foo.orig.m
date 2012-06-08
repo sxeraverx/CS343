@@ -42,6 +42,19 @@
 }
 @end
 
+@implementation Foo (SomeCategory)
+- (void)blah
+{
+}
+
+- (void)foo:(Foo *)someFoo didVisitNextFoo:(Foo *)nextFoo
+{
+  if ([Foo conformsToProtocol:@protocol(FooDelegate)]) {
+    const char *t = @encode(Foo);
+  }
+}
+@end
+
 @implementation Bar
 @end
 

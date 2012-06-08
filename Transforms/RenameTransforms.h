@@ -90,6 +90,10 @@ protected:
   // if we have a NamedDecl and the fully-qualified name matches
   bool nameMatches(const clang::NamedDecl *D, std::string &outNewName,
                    bool checkOnly = false) {
+    if (!D) {
+      return false;
+    }
+    
     auto I = nameMap.find(D);
     if (I != nameMap.end()) {
       outNewName = (*I).second;

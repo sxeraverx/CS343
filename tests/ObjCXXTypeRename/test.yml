@@ -9,4 +9,7 @@ Transforms:
     Types:
       - Foo: Foobar
       - FooDelegate: FoobarDelegate
+      - class CXX::Foo: Foobar
+      - class A::X: Y
+
  

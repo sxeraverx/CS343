@@ -1,5 +1,12 @@
 #import <Foundation/Foundation.h>
 
+namespace CXX {
+  class Foo {
+  public:
+    int x;
+  };
+};
+
 @class Foo;
 
 @protocol FooDelegate <NSObject>
@@ -8,9 +15,10 @@
 
 @interface Foo : NSObject
 {
-    Foo *next;
-    NSString *name;
-    id<FooDelegate> delegate;
+  CXX::Foo *f;
+  Foo *next;
+  NSString *name;
+  id<FooDelegate> delegate;
 }
 - (id)initWithFoo:(Foo *)someFoo;
 - (id)initWithName:(NSString *)someName;

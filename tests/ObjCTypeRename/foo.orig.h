@@ -23,3 +23,7 @@
 @interface Bar : Foo
 @end
 
+@interface Foo (SomeCategory) <FooDelegate>
+- (void)blah;
+@end
+

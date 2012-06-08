@@ -9,6 +9,7 @@
 
 - (void)dealloc
 {
+    delete f;
     next = nil;
     [name release];
     [super dealloc];
@@ -18,6 +19,7 @@
 {
     self = [super init];
     if (self) {
+        f = new CXX::Foo();
         next = someFoo;
     }
     return self;
