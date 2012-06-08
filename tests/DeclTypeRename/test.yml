@@ -1,0 +1,8 @@
+---
+Transforms:
+  TypeRename:
+    Ignore:
+      - /usr/include/.*
+    Types:
+      - class A::Foo: Foobar
+      - class A::(\w): \1\1

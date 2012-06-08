@@ -1,10 +1,15 @@
 #!/bin/sh
-git checkout Foo.cpp
-git checkout Foo.h
+cp foo.orig.h foo.h
+cp foo.orig.cpp foo.cpp
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .
+make
+
 mkdir -p ../../Build
 cd ../../Build/
 cmake ../
 make
 cd -
-cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON .
-../../Build/refactorial < refax.yml
+
+../../Build/refactorial < test.yml
+touch foo.h foo.cpp
+make

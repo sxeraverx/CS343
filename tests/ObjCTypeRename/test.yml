@@ -1,0 +1,12 @@
+---
+Transforms:
+  TypeRename:
+    Ignore:
+      - /usr/include/.*
+      - /usr/local/.*
+      - /System/.*
+      - /Library/.*
+    Types:
+      - Foo: Foobar
+      - FooDelegate: FoobarDelegate
+ 

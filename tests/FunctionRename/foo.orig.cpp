@@ -1,4 +1,6 @@
-#include "Foo.h"
+#include "foo.h"
+
+#define wc wasteCycle
 
 namespace SampleNameSpace {
   int Foo::counter = 0;
@@ -12,6 +14,7 @@ namespace SampleNameSpace {
 };
 
 void SampleNameSpace::Foo::doNothing() {
+  wc();
   wasteCycle();
   Foo::wasteCycle();
 }

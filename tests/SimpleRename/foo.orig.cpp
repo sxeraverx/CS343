@@ -1,4 +1,4 @@
-#include "Foo.h"
+#include "foo.h"
 
 namespace SampleNameSpace {
   int Foo::counter = 0;
@@ -20,6 +20,7 @@ void Foo::wasteCycle() {
 }
 
 Foo test() {
+  Foo a = Foo::Foo();
   return Foo();
 }
 

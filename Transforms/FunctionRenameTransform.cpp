@@ -3,90 +3,55 @@
 //
 
 #include "Transforms.h"
-#include <clang/Lex/Preprocessor.h>
+#include "RenameTransforms.h"
 
 using namespace clang;
 
-class FunctionRenameTransform : public Transform {
+class FunctionRenameTransform : public RenameTransform {
 public:
-  FunctionRenameTransform() : indentLevel(0) {}  
   virtual void HandleTranslationUnit(ASTContext &) override;
   
-  void collectAndRenameFunctionDecl(DeclContext *DC);
-  void processDeclContext(DeclContext *DC);  
-  void processStmt(Stmt *S);
   
 protected:
-  std::string fromFunctionQualifiedName;
-  std::string toFunctionName;
-  
-  std::map<const Decl *, std::string> functionNameMap;
-  bool functionMatches(const NamedDecl *N, std::string &outNewName);
-  void renameLocation(SourceLocation L, std::string& N);
-
-  
-  int indentLevel;
-  
-  std::string indent() {
-    return std::string(indentLevel, '\t');
-  }
-  
-  void pushIndent() {
-    indentLevel++;
-  }
-  
-  void popIndent() {
-    indentLevel--;
-  }
-  
-  std::string loc(SourceLocation L) {
-    std::string src;
-    llvm::raw_string_ostream sst(src);
-    L.print(sst, sema->getSourceManager());
-    return sst.str();
-  }
+  void collectAndRenameFunctionDecl(DeclContext *DC, bool topLevel = false);
+  void processDeclContext(DeclContext *DC, bool topLevel = false);  
+  void processStmt(Stmt *S);
 };
 
 REGISTER_TRANSFORM(FunctionRenameTransform);
 
 void FunctionRenameTransform::HandleTranslationUnit(ASTContext &C)
-{  
-  auto CFG = TransformRegistry::get().config["FunctionRename"];
-  
-  if (!CFG.IsMap()) {
-    llvm::errs() << "Error: Cannot find config entry \"FunctionRename\""
-      " or entry is not a map\n";
+{
+  auto I = loadConfig("FunctionRename", "Functions");
+  if (!I) {
     return;
   }
-  
-	fromFunctionQualifiedName = CFG.begin()->first.as<std::string>();
-  toFunctionName = CFG.begin()->second.as<std::string>();
-  
-  llvm::errs() << "FunctionRenameTransform, from: " << fromFunctionQualifiedName
-    << ", to: "<< toFunctionName << "\n";
-  
+
   auto TUD = C.getTranslationUnitDecl();
-  collectAndRenameFunctionDecl(TUD);
-  processDeclContext(TUD);
+  collectAndRenameFunctionDecl(TUD, true);
+  processDeclContext(TUD, true);
 }
 
-void FunctionRenameTransform::collectAndRenameFunctionDecl(DeclContext *DC)
+void FunctionRenameTransform::collectAndRenameFunctionDecl(DeclContext *DC,
+                                                           bool topLevel)
 {
-  // TODO: ignore system headers (/usr, /opt, /System and /Library)
   // TODO: Skip globally touched locations
-  //
   // if a.cpp and b.cpp both include c.h, then once a.cpp is processed,
   // we cas skip any location that is not in b.cpp
-  //
 
   pushIndent();
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
+    auto L = (*I)->getLocation();
+    if (topLevel && shouldIgnore(L)) {
+      continue;
+    }
+    
     if (auto D = dyn_cast<FunctionDecl>(*I)) {
       // TODO: If it's a ctor/dtor, it's an error
       
       std::string newName;
-      if (functionMatches(D, newName)) {
+      if (nameMatches(D, newName)) {
         renameLocation(D->getLocation(), newName);
       }
 
@@ -95,9 +60,8 @@ void FunctionRenameTransform::collectAndRenameFunctionDecl(DeclContext *DC)
       if (auto M = dyn_cast<CXXMethodDecl>(D)) {
         for (auto MI = M->begin_overridden_methods(),
              ME = M->end_overridden_methods(); MI != ME; ++MI) {
-          auto F = functionNameMap.find(*MI);
-          if (F != functionNameMap.end()) {
-            renameLocation(D->getLocation(), (*F).second);
+          if (nameMatches(*MI, newName, true)) {
+            renameLocation(D->getLocation(), newName);
           }
         }
       }
@@ -113,7 +77,8 @@ void FunctionRenameTransform::collectAndRenameFunctionDecl(DeclContext *DC)
 }
 
 
-void FunctionRenameTransform::processDeclContext(DeclContext *DC)
+void FunctionRenameTransform::processDeclContext(DeclContext *DC,
+                                                 bool topLevel)
 {  
   // TODO: ignore system headers (/usr, /opt, /System and /Library)
   // TODO: Skip globally touched locations
@@ -146,8 +111,10 @@ void FunctionRenameTransform::processDeclContext(DeclContext *DC)
       }
       
       // handle body
-      if (D->hasBody()) {
-        processStmt(D->getBody());
+      if (auto B = D->getBody()) {
+        if (stmtInSameFileAsDecl(B, D)) {
+          processStmt(B);
+        }
       }
     }
     else if (auto D = dyn_cast<VarDecl>(*I)) {
@@ -158,9 +125,10 @@ void FunctionRenameTransform::processDeclContext(DeclContext *DC)
     }
     else if (auto D = dyn_cast<ObjCMethodDecl>(*I)) {
       // handle body
-      auto B = D->getBody();
-      if (B) {
-        processStmt(B);
+      if (auto B = D->getBody()) {
+        if (stmtInSameFileAsDecl(B, D)) {
+          processStmt(B);
+        }
       }
     }
     
@@ -187,18 +155,22 @@ void FunctionRenameTransform::processStmt(Stmt *S)
   if (auto E = dyn_cast<MemberExpr>(S)) {
     // handle the case for member references (e.g. calling foo(), A::foo())
     if (auto D = E->getMemberDecl()) {
-      std::string newName;
-      if (functionMatches(D, newName)) {
-        renameLocation(E->getMemberLoc(), newName);
+      if (dyn_cast<FunctionDecl>(D)) {
+        std::string newName;
+        if (nameMatches(D, newName, true)) {
+          renameLocation(E->getMemberLoc(), newName);
+        }
       }
     }
   }
   else if (auto E = dyn_cast<DeclRefExpr>(S)) {
     // handle C function calls
     if (auto D = E->getDecl()) {
-      std::string newName;
-      if (functionMatches(D, newName)) {
-        renameLocation(E->getLocation(), newName);
+      if (dyn_cast<FunctionDecl>(D)) {
+        std::string newName;
+        if (nameMatches(D, newName, true)) {
+          renameLocation(E->getLocation(), newName);
+        }
       }
     }
   }
@@ -208,42 +180,4 @@ void FunctionRenameTransform::processStmt(Stmt *S)
   }
   
   popIndent();
-}
-
-
-bool FunctionRenameTransform::functionMatches(const NamedDecl *N,
-                                              std::string &outNewName)
-{
-  // TODO: Replace with regex
-  auto I = functionNameMap.find(N);
-  if (I != functionNameMap.end()) {
-    outNewName = (*I).second;
-    return true;
-  }
-  
-  auto QN = N->getQualifiedNameAsString();
-  if (QN != fromFunctionQualifiedName) {
-    return false;
-  }
-  
-  functionNameMap[N] = toFunctionName;
-  outNewName = toFunctionName;
-  return true;
-}
-
-void FunctionRenameTransform::renameLocation(SourceLocation L, std::string &N)
-{
-  if (L.isValid()) {
-    if (L.isMacroID()) {
-      // TODO: emit error
-    }
-    else {
-      Preprocessor &P = sema->getPreprocessor();      
-      auto LE = P.getLocForEndOfToken(L);
-      if (LE.isValid()) {
-        auto E = LE.getLocWithOffset(-1);
-        rewriter.ReplaceText(SourceRange(L, E), N);
-      }
-    }
-  }
 }

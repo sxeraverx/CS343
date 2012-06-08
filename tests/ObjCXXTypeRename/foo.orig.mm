@@ -1,4 +1,5 @@
 #import "foo.h"
+#import <vector>
 
 @implementation Foo
 
@@ -8,6 +9,7 @@
 
 - (void)dealloc
 {
+    delete f;
     next = nil;
     [name release];
     [super dealloc];
@@ -17,6 +19,7 @@
 {
     self = [super init];
     if (self) {
+        f = new CXX::Foo();
         next = someFoo;
     }
     return self;
@@ -45,9 +48,16 @@
 @implementation Bar
 @end
 
+A::Foo test(A::Foo &a) {
+  A::Foo b = a;
+  return b;
+}
 
 int main()
 {
+    A::Foo aa;
+    std::vector<A::Foo> vf;
+    
     @autoreleasepool {
         Foo *a = [[[Foo alloc] initWithName:@"Foo"] autorelease];
         Foo *b = [[[Foo alloc] initWithFoo:a] autorelease];

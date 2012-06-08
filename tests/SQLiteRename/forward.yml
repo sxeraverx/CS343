@@ -1,0 +1,6 @@
+---
+Transforms:
+  TypeRename:
+    Types:
+      - sqlite3: SequelLiteThree
+    

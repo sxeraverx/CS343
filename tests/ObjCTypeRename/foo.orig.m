@@ -1,5 +1,4 @@
 #import "foo.h"
-#import <vector>
 
 @implementation Foo
 
@@ -43,19 +42,25 @@
 }
 @end
 
+@implementation Foo (SomeCategory)
+- (void)blah
+{
+}
+
+- (void)foo:(Foo *)someFoo didVisitNextFoo:(Foo *)nextFoo
+{
+  if ([Foo conformsToProtocol:@protocol(FooDelegate)]) {
+    const char *t = @encode(Foo);
+  }
+}
+@end
+
 @implementation Bar
 @end
 
-A::Foo test(A::Foo &a) {
-  A::Foo b = a;
-  return b;
-}
 
 int main()
 {
-    A::Foo aa;
-    std::vector<A::Foo> vf;
-    
     @autoreleasepool {
         Foo *a = [[[Foo alloc] initWithName:@"Foo"] autorelease];
         Foo *b = [[[Foo alloc] initWithFoo:a] autorelease];

@@ -28,8 +28,8 @@ int main()
   std::vector<A::Foo> vf;
   vf.push_back(a);
   
-  FX(b);
-  vf.push_back(b);
+  // FX(b);
+  // vf.push_back(b);
   
   fvcp c;
   c.push_back(f);
