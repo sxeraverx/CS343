@@ -160,6 +160,13 @@ protected:
     return false;
   }
   
+  bool stmtInSameFileAsDecl(clang::Stmt *S, clang::Decl *D) {
+    clang::SourceManager &SM = sema->getSourceManager();
+    clang::FullSourceLoc FSL1(S->getLocStart(), SM);
+    clang::FullSourceLoc FSL2(D->getLocation(), SM);
+    return FSL1.getFileID() == FSL2.getFileID();    
+  }
+  
   void renameLocation(clang::SourceLocation L, std::string& N) {
     if (L.isValid()) {
       if (L.isMacroID()) {        
@@ -199,6 +206,7 @@ protected:
       clang::Preprocessor &P = sema->getPreprocessor();      
       auto LE = P.getLocForEndOfToken(L);
       if (LE.isValid()) {
+        
         // getLocWithOffset returns the location *past* the token, hence -1
         auto E = LE.getLocWithOffset(-1);
         
@@ -208,6 +216,8 @@ protected:
         // needs skipping (such as in refactoring API user's code, then
         // the API headers need no changing since later the new API will be
         // in place)
+        
+        // llvm::errs() << "rep: " << loc(L) << ", " << loc(E) << "\n";
         rewriter.ReplaceText(clang::SourceRange(L, E), N);
       }
     }    

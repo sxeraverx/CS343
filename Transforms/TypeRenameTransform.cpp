@@ -220,8 +220,10 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
       processQualifierLoc(D->getQualifierLoc());
       
       // handle body
-      if (D->hasBody()) {
-        processStmt(D->getBody());
+      if (auto B = D->getBody()) {
+        if (stmtInSameFileAsDecl(B, D)) {
+          processStmt(B);
+        }
       }
     }
     else if (auto D = dyn_cast<VarDecl>(*I)) {
@@ -260,9 +262,10 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
       }
       
       // handle body
-      auto B = D->getBody();
-      if (B) {
-        processStmt(B);
+      if (auto B = D->getBody()) {
+        if (stmtInSameFileAsDecl(B, D)) {
+          processStmt(B);
+        }
       }
     }
     else if (auto D = dyn_cast<ObjCPropertyDecl>(*I)) {

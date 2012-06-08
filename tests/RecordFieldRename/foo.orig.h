@@ -15,12 +15,15 @@ namespace MyNamespace {
       int a;
     } m_s;
     
+    union {
+      int a;
+      char b[4];
+    } m_u;
+    
     Foo() : index(0), a(0), b(0), c(0), m_p(1), m_q(1), m_r(1) {}
     
     int sum();    
   };
   
-  void bar(Foo& a, Foo *b) {
-    a.index = b->m_p;
-  }  
+  void bar(Foo& a, Foo *b);
 };
