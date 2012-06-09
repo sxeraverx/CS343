@@ -36,13 +36,14 @@ SET(Transforms_sources
   MethodMoveTransform.cpp
   RecordFieldRenameTransform.cpp
   Transforms.cpp
-  TypeRenameTransform.cpp)
+  TypeRenameTransform.cpp
+)
 
 FOREACH(arg ${Transforms_sources})
   LIST(APPEND sources "Transforms/${arg}")
 ENDFOREACH(arg ${Transforms_sources})
 
-SET(sources ${sources} main.cpp)
+SET(sources ${sources} main.cpp Refactoring.cpp)
 
 ADD_EXECUTABLE (refactorial ${sources} )
 TARGET_LINK_LIBRARIES (refactorial ${REQ_LLVM_LIBRARIES} ${CLANG_LIBRARIES} ${PCRE_LIBRARY} ${PCRECPP_LIBRARY} yaml-cpp)

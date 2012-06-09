@@ -1,11 +1,10 @@
 #include "Transforms.h"
 
 #include <clang/AST/ParentMap.h>
-#include <clang/Lex/Lexer.h>
-#include <clang/Sema/Sema.h>
 #include <llvm/Support/raw_ostream.h>
 
 using namespace clang;
+using namespace clang::tooling;
 using namespace std;
 
 class AccessorsTransform : public Transform
@@ -19,7 +18,7 @@ public:
 		fields = TransformRegistry::get().config["Accessors"].as<decltype(fields)>();
 		ctx = &Ctx;
 		collect(ctx->getTranslationUnitDecl());
-		replace();
+		insertAccessors();
 	}
 	void collect(const DeclContext *ns_decl) {
 		for(auto subdecl = ns_decl->decls_begin(); subdecl != ns_decl->decls_end(); subdecl++) {
@@ -53,10 +52,9 @@ public:
 			if(const CXXRecordDecl *rc_decl = dyn_cast<CXXRecordDecl>(*subdecl)) {
 				for(auto member = rc_decl->field_begin(); member != rc_decl->field_end(); member++)
 					if(find(fields.begin(), fields.end(), member->getQualifiedNameAsString())!=fields.end())
-						fieldRanges[member->getQualifiedNameAsString()] = &*member;
+						fieldRanges[member->getQualifiedNameAsString()] = member.operator*();
 			}
 			if(const FunctionDecl *fn_decl = dyn_cast<FunctionDecl>(*subdecl)) {
-				//llvm::errs() << fn_decl->getNameAsString() << "\n";
 				if(fn_decl->getNameAsString() != "main")
 					continue;
 				if(Stmt *body = fn_decl->getBody())
@@ -85,7 +83,6 @@ public:
 				while(isa<Expr>(PM.getParent(top_stmt_within_compound))
 				      || isa<DeclStmt>(PM.getParent(top_stmt_within_compound)))
 					top_stmt_within_compound = PM.getParent(top_stmt_within_compound);
-				top_stmt_within_compound->dumpPretty(*ctx);
 				
 				string stmts_str, base_str;
 				llvm::raw_string_ostream sstr(stmts_str), base_sstr(base_str);
@@ -113,8 +110,11 @@ public:
 						bin_op->getRHS()->printPretty(sstr, *ctx, 0, PrintingPolicy(ctx->getLangOpts()));
 						collect(bin_op->getRHS(), PM);
 						sstr << " );\n";
-						rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), sstr.str());
-						rewriter.ReplaceText(bin_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
+						//rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), sstr.str());
+						//rewriter.ReplaceText(bin_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
+						insert(top_stmt_within_compound->getLocStart(), sstr.str());
+						replace(bin_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
+						
 					}
 					else
 					{
@@ -128,7 +128,8 @@ public:
 						collect(bin_op->getRHS(), PM);
 						bin_op->getRHS()->printPretty(sstr, *ctx, 0, PrintingPolicy(ctx->getLangOpts()));
 						sstr << " )";
-						rewriter.ReplaceText(bin_op->getSourceRange(), sstr.str());
+						//rewriter.ReplaceText(bin_op->getSourceRange(), sstr.str());
+						replace(bin_op->getSourceRange(), sstr.str());
 					}
 				}
 				else if(bin_op->getOpcode() == clang::BO_Assign)
@@ -137,7 +138,8 @@ public:
 					collect(bin_op->getRHS(), PM);
 					bin_op->getRHS()->printPretty(sstr, *ctx, 0, PrintingPolicy(ctx->getLangOpts()));
 					sstr << " )";
-					rewriter.ReplaceText(bin_op->getSourceRange(), sstr.str());
+					//rewriter.ReplaceText(bin_op->getSourceRange(), sstr.str());
+					replace(bin_op->getSourceRange(), sstr.str());
 				}
 			}
 		}
@@ -157,11 +159,14 @@ public:
 				while(isa<Expr>(PM.getParent(top_stmt_within_compound))
 				      || isa<DeclStmt>(PM.getParent(top_stmt_within_compound)))
 					top_stmt_within_compound = PM.getParent(top_stmt_within_compound);
-				top_stmt_within_compound->dumpPretty(*ctx);
+				const Stmt *top_stmt_or_compound = top_stmt_within_compound;
+				if(isa<CompoundStmt>(PM.getParent(top_stmt_within_compound)))
+					top_stmt_within_compound = PM.getParent(top_stmt_within_compound);
 				
-				string stmts_str, base_str;
-				llvm::raw_string_ostream sstr(stmts_str), base_sstr(base_str);
+				string base_str;
+				llvm::raw_string_ostream base_sstr(base_str);
 				sub_expr->getBase()->printPretty(base_sstr, *ctx, 0, PrintingPolicy(ctx->getLangOpts()));
+				base_str = base_sstr.str();
 				
 				string getterName = "get" + sub_expr->getMemberDecl()->getNameAsString();
 				getterName[3] = toupper(getterName[3]);
@@ -173,11 +178,148 @@ public:
 				}
 				else
 				{
-					bool needToInsertBraces = !isa<CompoundStmt>(PM.getParent(top_stmt_within_compound)) && un_op!=top_stmt_within_compound;
-
-					sstr << base_sstr.str() << "." << setterName << "( ";
-					sstr << base_sstr.str() << "." << getterName << "() ";
-					sstr << (un_op->isIncrementOp()?"+":"-") << " 1)";
+					string incrStmt;
+					{
+						llvm::raw_string_ostream sstr(incrStmt);
+						sstr << base_str << "." << setterName << "( ";
+						sstr << base_str << "." << getterName << "() ";
+						sstr << (un_op->isIncrementOp()?"+":"-") << " 1)";
+						incrStmt = sstr.str();
+					}
+					
+					string getStmt;
+					{
+						llvm::raw_string_ostream sstr(getStmt);
+						sstr << base_str << "." << getterName << "()";
+						getStmt = sstr.str();
+					}
+					
+					bool onlyStmt = top_stmt_within_compound == top_stmt_or_compound;
+					bool onlyExpr = un_op == top_stmt_within_compound;
+					
+					bool needToInsertBraces = false, needToInsertParentBraces = false;
+					if( const IfStmt *if_stmt = dyn_cast<IfStmt>(PM.getParent(top_stmt_or_compound)) )
+					{
+						if(if_stmt->getThen() == top_stmt_or_compound
+						   || if_stmt->getElse() == top_stmt_or_compound)
+						{
+							if(onlyExpr)
+								//rewriter.ReplaceText(un_op->getSourceRange(), incrStmt);
+								replace(un_op->getSourceRange(), incrStmt);
+							else
+							{
+								//rewriter.ReplaceText(un_op->getSourceRange(), getStmt);
+								replace(un_op->getSourceRange(), getStmt);
+								if(un_op->isPrefix())
+								{
+									//rewriter.InsertTextBefore(un_op->getLocStart(), incrStmt + ";\n");
+									insert(un_op->getLocStart(), incrStmt + ";\n");
+								}
+								else
+								{
+									assert(un_op->isPostfix());
+									//rewriter.InsertTextAfterToken(un_op->getLocEnd(), ";\n" + incrStmt);
+									insert(findLocAfterSemi(un_op->getLocEnd()), incrStmt + ";\n");
+								}
+								if(onlyStmt)
+									needToInsertBraces = true;
+							}
+						}
+						else
+						{
+							assert(top_stmt_within_compound == top_stmt_or_compound);
+							assert(if_stmt->getCond() == top_stmt_within_compound);
+							if(un_op->isPrefix())
+							{
+								//rewriter.InsertTextBefore(if_stmt->getLocStart(), incrStmt);
+								insert(if_stmt->getLocStart(), incrStmt);
+							}
+							else
+							{
+								assert(un_op->isPostfix());
+								//rewriter.InsertTextAfter(if_stmt->getLocEnd(), incrStmt);
+								insert(if_stmt->getLocEnd(), incrStmt);
+							}
+							if(onlyStmt)
+								needToInsertParentBraces = true;
+						}
+					}
+					else if( const ForStmt *for_stmt = dyn_cast<ForStmt>(PM.getParent(top_stmt_or_compound)) )
+					{
+						if(for_stmt->getBody() == top_stmt_or_compound)
+						{
+							if(onlyExpr)
+								//rewriter.ReplaceText(un_op->getSourceRange(), incrStmt);
+								replace(un_op->getSourceRange(), incrStmt);
+							else
+							{
+								//rewriter.ReplaceText(un_op->getSourceRange(), getStmt);
+								replace(un_op->getSourceRange(), getStmt);
+								if(un_op->isPrefix())
+								{
+									//rewriter.InsertTextBefore(un_op->getLocStart(), incrStmt + ";\n");
+									insert(un_op->getLocStart(), incrStmt);
+								}
+								else
+								{
+									assert(un_op->isPostfix());
+									//rewriter.InsertTextAfterToken(un_op->getLocEnd(), ";\n" + incrStmt);
+									insert(un_op->getLocEnd(), incrStmt);
+								}
+								if(onlyStmt)
+									needToInsertBraces = true;
+							}
+						}
+						else if( for_stmt->getInit() == top_stmt_within_compound )
+						{
+							assert(onlyStmt); //no blocks in initializer
+							if(onlyExpr)
+								//rewriter.ReplaceText(un_op->getSourceRange(), incrStmt);
+								replace(un_op->getSourceRange(), incrStmt);
+							else
+							{
+								//rewriter.InsertTextBefore(for_stmt->getLocStart(), incrStmt);
+								insert(for_stmt->getLocStart(), incrStmt + ";\n");
+								if(un_op->isPostfix())
+									//not sure if this is legit, but i can't think of a better way
+									//rewriter.ReplaceText(un_op->getSourceRange(), "(" + getStmt + " - 1)");
+									replace(un_op->getSourceRange(), "(" + getStmt + " - 1)");
+								else
+									//rewriter.ReplaceText(un_op->getSourceRange(), getStmt);
+									replace(un_op->getSourceRange(), getStmt );
+							}
+						}
+						else if( for_stmt->getInc() == top_stmt_within_compound )
+						{
+							assert(onlyStmt); //no blocks in increment
+							
+						}
+						else
+						{
+							assert(onlyStmt); //no blocks in conditions
+							assert(for_stmt->getCond() == top_stmt_within_compound);
+							if(un_op->isPrefix())
+							{
+								//rewriter.InsertTextBefore(for_stmt->getLocStart(), incrStmt);
+							}
+							else
+							{
+								assert(un_op->isPostfix());
+								//rewriter.InsertTextAfter(for_stmt->getLocEnd(), incrStmt);
+							}
+						}
+					}
+						/*
+					bool needToInsertBraces =
+						(
+							(ifStmt = dyn_cast<IfStmt>(PM.getParent(top_stmt_within_compound))
+							 && ((ifStmt->getThen() == top_stmt_within_compound)
+							     || ifStmt->getElse() == top_stmt_within_compound))
+							|| (forStmt = dyn_cast<ForStmt>(PM.getParent(top_stmt_within_compound))
+							    && forStmt->getBody() == top_stmt_within_compound)
+							|| (whileStmt = dyn_cast<WhileStmt>(PM
+							)
+						&& un_op!=top_stmt_within_compound;
 					
 					if(un_op==top_stmt_within_compound)
 					{
@@ -185,20 +327,26 @@ public:
 					}
 					else if(un_op->isPrefix())
 					{
-						rewriter.ReplaceText(un_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
-						rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), sstr.str() + ";\n");
+						rewriter.ReplaceText(un_op->getSourceRange(),
+						                     base_str + "." + getterName + "()");
+						rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(),
+						                          sstr.str() + ";\n");
 					}
 					else
 					{
 						assert(un_op->isPostfix());
-						rewriter.ReplaceText(un_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
-						rewriter.InsertTextAfterToken(top_stmt_within_compound->getLocEnd(), ";\n" + sstr.str());
-					}
+						rewriter.ReplaceText(un_op->getSourceRange(),
+						                     base_sstr.str() + "." + getterName + "()");
+						rewriter.InsertTextAfterToken(top_stmt_within_compound->getLocEnd(),
+						                              ";\n" + sstr.str());
+						                              }*/
 					if(needToInsertBraces)
 					{
-						rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), "{\n");
-						SourceLocation locAfterSemi = Lexer::findLocationAfterToken(top_stmt_within_compound->getLocEnd(), tok::semi, sema->getSourceManager(), sema->getLangOpts(), false);
-						rewriter.InsertTextAfterToken(locAfterSemi, "\n}");
+						//rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), "{\n");
+						insert(top_stmt_within_compound->getLocStart(), "{\n");
+						SourceLocation locAfterSemi = findLocAfterToken(top_stmt_or_compound->getLocEnd(), tok::semi);
+						//rewriter.InsertTextAfterToken(locAfterSemi, "\n}");
+						insert(locAfterSemi, "}\n");
 					}
 				}
 			}
@@ -213,7 +361,6 @@ public:
 				while(isa<Expr>(PM.getParent(top_stmt_within_compound))
 				      || isa<DeclStmt>(PM.getParent(top_stmt_within_compound)))
 					top_stmt_within_compound = PM.getParent(top_stmt_within_compound);
-				top_stmt_within_compound->dumpPretty(*ctx);
 				
 				string stmts_str, base_str;
 				llvm::raw_string_ostream sstr(stmts_str), base_sstr(base_str);
@@ -224,7 +371,8 @@ public:
 				string setterName = "set" + mem_expr->getMemberDecl()->getNameAsString();
 				setterName[3] = toupper(setterName[3]);
 				sstr << base_sstr.str() << "." << getterName << "()";
-				rewriter.ReplaceText(mem_expr->getSourceRange(), sstr.str());
+				//rewriter.ReplaceText(mem_expr->getSourceRange(), sstr.str());
+				replace(mem_expr->getSourceRange(), sstr.str());
 			}
 		}
 	}
@@ -250,7 +398,7 @@ void collect(const Stmt *stmt, const ParentMap &PM) {
 		}
 	}
 }
-void replace() {
+void insertAccessors() {
 	for(auto iter = fieldRanges.begin(); iter != fieldRanges.end(); ++iter)
 	{
 		CXXRecordDecl *parent = dyn_cast<CXXRecordDecl>(iter->second->getParent());
@@ -275,9 +423,8 @@ void replace() {
 		if(!hasUserDefinedMethods)
 		{
 			loc = parent->getRBraceLoc();
-			loc.print(llvm::errs(), sema->getSourceManager());
-			llvm::errs() << "\n";
-			rewriter.InsertTextBefore(parent->getRBraceLoc(), sstr.str());
+			//rewriter.InsertTextBefore(parent->getRBraceLoc(), sstr.str());
+			insert(parent->getRBraceLoc(), sstr.str());
 		}
 		else
 		{
@@ -291,17 +438,13 @@ void replace() {
 					continue;
 				}
 				loc = lastMethod->getSourceRange().getEnd();
-				llvm::errs() << lastMethod->getQualifiedNameAsString();
-				lastMethod->getSourceRange().getBegin().print(llvm::errs(), sema->getSourceManager());
-				llvm::errs() << "-";
-				lastMethod->getSourceRange().getEnd().print(llvm::errs(), sema->getSourceManager());
-				llvm::errs() << "\n";
 				++check;
 				if(check==parent->method_end())
 					break;
 				++lastMethod;
 			} while(1);
-			rewriter.InsertTextAfterToken(loc, sstr.str());
+			//rewriter.InsertTextAfterToken(loc, sstr.str());
+			insert(loc, sstr.str());
 		}
 	}
 }

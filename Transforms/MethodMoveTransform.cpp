@@ -39,7 +39,7 @@ REGISTER_TRANSFORM(MethodMoveTransform);
   
 void MethodMoveTransform::HandleTranslationUnit(ASTContext &C)
 {
-	auto movingSpec = TransformRegistry::get().config["MethodMoveTransform"].begin();
+	auto movingSpec = TransformRegistry::get().config["MethodMove"].begin();
 	movingClassName = movingSpec->first.as<std::string>();
 	clang::SourceManager &SM = C.getSourceManager();
 	clang::FileManager &FM = SM.getFileManager();
@@ -125,7 +125,7 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
 			continue;
 		}
     
-		std::string&& B = rewriteMethodInHeader(&*MI);
+		std::string&& B = rewriteMethodInHeader(MI.operator*());
 		aggregateSource += B;
 		aggregateSource += "\n";
 	}
@@ -134,9 +134,10 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
 
 
 	// write the source
-	auto MFI = rewriter.getSourceMgr().getMainFileID();
-	auto LEOF = rewriter.getSourceMgr().getLocForEndOfFile(MFI);
-	rewriter.InsertText(LEOF, aggregateSource);
+	auto MFI = sema->getSourceManager().getMainFileID();
+	auto LEOF = sema->getSourceManager().getLocForEndOfFile(MFI);
+	
+	insert(LEOF, aggregateSource);
 }
 
 void MethodMoveTransform::collectNamespaceInfo(DeclContext *DC,
@@ -271,7 +272,7 @@ std::string MethodMoveTransform::rewriteMethodInHeader(CXXMethodDecl *M)
 
 	// replace the body with ;
 	SourceRange replaceRange(MTLE, MBE);
-	rewriter.ReplaceText(replaceRange, ";");
+	replace(replaceRange, ";");
 
 	// return the captured source  
 	// TODO: re-indent the source  

@@ -222,7 +222,7 @@ protected:
         // in place)
         
         // llvm::errs() << "rep: " << loc(L) << ", " << loc(E) << "\n";
-        rewriter.ReplaceText(clang::SourceRange(L, E), N);
+        replace(clang::SourceRange(L, E), N);
       }
     }    
   }

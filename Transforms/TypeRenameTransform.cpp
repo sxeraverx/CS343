@@ -245,7 +245,7 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
             // needs skipping (such as in refactoring API user's code, then
             // the API headers need no changing since later the new API will be
             // in place)              
-              rewriter.ReplaceText(SourceRange(NB, NE), newName);        
+              replace(SourceRange(NB, NE), newName);
             }
           }
         }

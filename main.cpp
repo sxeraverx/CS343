@@ -8,10 +8,16 @@
 #include "llvm/Support/raw_ostream.h"
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/Tooling.h>
+#include "Refactoring.h"
 
 #include <iostream>
+#include <fstream>
+
+#include <unistd.h>
 
 using namespace clang;
+using namespace std;
+
 
 #include "Transforms/Transforms.h"
 
@@ -23,25 +29,26 @@ struct YAML::convert<YAML::Node> {
 
 int main(int argc, char **argv)
 {	
-	std::string errorMessage("Could not load compilation database");
+	string errorMessage("Could not load compilation database");
+
+	YAML::Node compileCommands = YAML::LoadFile("compile_commands.json");
 	
-	std::vector<YAML::Node> config = YAML::LoadAll(std::cin);
+	vector<YAML::Node> config = YAML::LoadAll(cin);
 	for(auto configSectionIter = config.begin(); configSectionIter != config.end(); ++configSectionIter)
 	{
 		TransformRegistry::get().config = YAML::Node();
 		//figure out which files we need to work on
 		YAML::Node& configSection = *configSectionIter;
-		std::vector<std::string> inputFiles;
+		vector<string> inputFiles;
 		if(configSection["Files"])
-			inputFiles = configSection["Files"].as<std::vector<std::string> >();
+			inputFiles = configSection["Files"].as<vector<string> >();
 		else
 		{
 			llvm::errs() << "Warning: No files selected. Operating on all files.\n";
 			
-			YAML::Node compileCommands = YAML::LoadFile("compile_commands.json");
 			for(auto iter = compileCommands.begin(); iter != compileCommands.end(); ++iter)
 			{
-				inputFiles.push_back((*iter)["file"].as<std::string>());
+				inputFiles.push_back((*iter)["file"].as<string>());
 			}
 		}
 		if(!configSection["Transforms"])
@@ -52,23 +59,18 @@ int main(int argc, char **argv)
 		
 		//load up the compilation database
 		llvm::OwningPtr<tooling::CompilationDatabase> Compilations(tooling::CompilationDatabase::loadFromDirectory(".", errorMessage));
-		tooling::ClangTool ct(*Compilations.take(), inputFiles);
+		RefactoringTool rt(*Compilations.take(), inputFiles);
 		
 		TransformRegistry::get().config = configSection["Transforms"];
-
+		TransformRegistry::get().replacements = &rt.getReplacements();
+		
 		//finally, run
 		for(auto iter = configSection["Transforms"].begin(); iter != configSection["Transforms"].end(); iter++)
 		{
-			llvm::errs() << iter->first.as<std::string>() +"Transform" << "\n";
-			ct.run(new TransformFactory(TransformRegistry::get()[iter->first.as<std::string>() + "Transform"]));
+			
+			llvm::errs() << iter->first.as<string>() +"Transform" << "\n";
+			rt.run(new TransformFactory(TransformRegistry::get()[iter->first.as<string>() + "Transform"]));
 		}
-		
 	}
 	return 0;
 }
-
-
-
-
-
-

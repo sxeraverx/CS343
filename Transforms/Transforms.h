@@ -4,23 +4,31 @@
 #include <string>
 #include <vector>
 
+#include <clang/Lex/Lexer.h>
 #include <clang/Rewrite/Rewriter.h>
 #include <clang/Sema/Sema.h>
 #include <clang/Sema/SemaConsumer.h>
 #include <clang/Tooling/Tooling.h>
 #include <clang/Frontend/CompilerInstance.h>
+#include <llvm/ADT/SmallString.h>
+#include <llvm/Support/FileSystem.h>
+
+#include "Refactoring.h"
 
 #include <yaml-cpp/yaml.h>
 
 class Transform : public clang::SemaConsumer
 {
-public:
-	~Transform();
 protected:
 	clang::Sema *sema;
-	clang::Rewriter rewriter;
 	virtual void InitializeSema(clang::Sema &s) override;
 	friend class TransformFactory;
+	void insert(clang::SourceLocation loc, std::string text);
+	void replace(clang::SourceRange range, std::string text);
+	clang::SourceLocation findLocAfterToken(clang::SourceLocation curLoc, clang::tok::TokenKind tok) {
+		return clang::Lexer::findLocationAfterToken(curLoc, tok, sema->getSourceManager(), sema->getLangOpts(), true);
+	}
+	clang::SourceLocation findLocAfterSemi(clang::SourceLocation curLoc) {return findLocAfterToken(curLoc, clang::tok::semi);}
 };
 
 template <typename T> Transform* transform_factory()
@@ -36,6 +44,9 @@ class TransformRegistry
 	std::map<std::string,transform_creator> m_transforms;
  public:
 	YAML::Node config;
+	std::map<std::string, std::string> touchedFiles;
+	Replacements *replacements;
+	
 	static TransformRegistry& get();
 	void add(const std::string &, transform_creator);
 	const transform_creator operator[](const std::string &name) const;
