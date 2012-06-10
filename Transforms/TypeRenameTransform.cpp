@@ -13,14 +13,6 @@
 
 using namespace clang;
 
-// TODO: Instead of using string match, use a two-pass approach
-// pass 1: find the Decl that needs to be renamed
-// pass 2: use TypeLoc's type info to find if it's the original Decl
-// reason: need a way to handle in-function classes
-// (the reas name of those classes do not show up in the TypeLoc's
-// qualified name)
-// issue: what about forward-decl'd types (class A; A* b;) ? 
-
 class TypeRenameTransform : public RenameTransform {
 public:
   virtual void HandleTranslationUnit(ASTContext &C) override;
@@ -136,8 +128,6 @@ void TypeRenameTransform::collectRenameDecls(DeclContext *DC, bool topLevel)
   popIndent();  
 }
 
-// TODO: A special case for top-level decl context
-// (because we can quickly skip system/refactored nodes there)
 void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
 {  
   // TODO: Skip globally touched locations
@@ -464,12 +454,12 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
   pushIndent();
   auto QT = TL.getType();
     
-  llvm::errs() << indent()
-    << "TypeLoc"
-    << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
-    << "\n" << indent() << "qualType as str: " << QT.getAsString()
-    << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
-    << "\n";
+  // llvm::errs() << indent()
+  //   << "TypeLoc"
+  //   << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
+  //   << "\n" << indent() << "qualType as str: " << QT.getAsString()
+  //   << "\n" << indent() << "beginLoc: " << loc(TL.getBeginLoc())
+  //   << "\n";
     
   switch(TL.getTypeLocClass()) {    
     case TypeLoc::TypeLocClass::FunctionProto:
