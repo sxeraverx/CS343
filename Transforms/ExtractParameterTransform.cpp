@@ -16,7 +16,7 @@ protected:
 	string extractVariableName;
 	string extractDefaultValue;
 
-	map<const FunctionDecl*, list<const VarDecl*>> rewrites;
+	map<const FunctionDecl*, list<const VarDecl*> > rewrites;
   
 	void collectDeclContext(const DeclContext *DC);
 	void collectFunction(const FunctionDecl *FN);
