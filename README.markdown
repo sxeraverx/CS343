@@ -39,8 +39,8 @@ Then you need to build LLVW and Clang with the overridden compiler and linker se
     cd build-llvm    
     cmake -DCMAKE_BUILD_TYPE:STRING=Release \
         -DCMAKE_CXX_FLAGS:STRING=-stdlib=libc++ \
-        -DCMAKE_SHARED_LINKER_FLAGS:STRING=-stdlib=libc++ .
-    cmake ../llvm
+        -DCMAKE_SHARED_LINKER_FLAGS:STRING=-stdlib=libc++ \
+        ../llvm
     make
     sudo make install
     
