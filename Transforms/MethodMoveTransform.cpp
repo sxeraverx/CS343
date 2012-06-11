@@ -128,7 +128,7 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
 			continue;
 		}
     
-		std::string&& B = rewriteMethodInHeader(&(*MI));
+		std::string B = rewriteMethodInHeader(&(*MI));
 		aggregateSource += B;
 		aggregateSource += "\n";
 	}
