@@ -15,7 +15,7 @@ private:
 	ASTContext *ctx;
 public:
 	void HandleTranslationUnit(ASTContext &Ctx) override {
-		fields = TransformRegistry::get().config["Accessors"].as<decltype(fields)>();
+		fields = TransformRegistry::get().config["Accessors"].as<list<string> >();
 		ctx = &Ctx;
 		collect(ctx->getTranslationUnitDecl());
 		insertAccessors();

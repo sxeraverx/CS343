@@ -11,6 +11,7 @@
 #include "RenameTransforms.h"
 #include <clang/AST/DeclFriend.h>
 #include <clang/AST/DeclTemplate.h>
+#include <clang/AST/TypeLoc.h>
 
 using namespace clang;
 
@@ -41,13 +42,13 @@ private:
 
 // will be undefined by clang/AST/TypeNodes.def
 #define ABSTRACT_TYPE(Class, Base)
-#define TYPE(Class, Base) case TypeLoc::TypeLocClass::Class: \
+#define TYPE(Class, Base) case TypeLoc::Class: \
     sst << #Class; \
     break;
 
     switch(C) {
       #include <clang/AST/TypeNodes.def>
-      case TypeLoc::TypeLocClass::Qualified:
+      case TypeLoc::Qualified:
         sst << "Qualified";
         break;
     }
@@ -514,7 +515,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
   //   << "\n";
     
   switch(TL.getTypeLocClass()) {    
-    case TypeLoc::TypeLocClass::FunctionProto:
+    case TypeLoc::FunctionProto:
     {
       if (auto FTL = dyn_cast<FunctionTypeLoc>(&TL)) {
         for (unsigned I = 0, E = FTL->getNumArgs(); I != E; ++I) {
@@ -527,7 +528,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     // for example, the elaborated type loc of "A::B::C" is A::B
     // we need to know if A::B and A are types we are renaming
     // (so that we can handle nested classes, in-class typedefs, etc.)
-    case TypeLoc::TypeLocClass::Elaborated:
+    case TypeLoc::Elaborated:
     {
       if (auto ETL = dyn_cast<ElaboratedTypeLoc>(&TL)) {
         processQualifierLoc(ETL->getQualifierLoc(), forceRewriteMacro);
@@ -535,7 +536,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
-    case TypeLoc::TypeLocClass::ObjCObject:
+    case TypeLoc::ObjCObject:
     {
       if (auto OT = dyn_cast<ObjCObjectTypeLoc>(&TL)) {
         for (unsigned I = 0, E = OT->getNumProtocols(); I != E; ++I) {
@@ -550,7 +551,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
-    case TypeLoc::TypeLocClass::InjectedClassName:
+    case TypeLoc::InjectedClassName:
     {
       if (auto TSTL = dyn_cast<InjectedClassNameTypeLoc>(&TL)) {
         auto CD = TSTL->getDecl();
@@ -562,7 +563,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
-    case TypeLoc::TypeLocClass::TemplateSpecialization:
+    case TypeLoc::TemplateSpecialization:
     {
       if (auto TSTL = dyn_cast<TemplateSpecializationTypeLoc>(&TL)) {
         
@@ -587,7 +588,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
           // (we skip things like Foo<1> )
           auto AL = TSTL->getArgLoc(I);
           auto A = AL.getArgument();
-          if (A.getKind() != TemplateArgument::ArgKind::Type) {
+          if (A.getKind() != TemplateArgument::Type) {
             continue;
           }
           
@@ -600,7 +601,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     }
     
     // typedef is tricky
-    case TypeLoc::TypeLocClass::Typedef:
+    case TypeLoc::Typedef:
     {
       auto T = TL.getTypePtr();
       if (auto TDT = dyn_cast<TypedefType>(T)) {
@@ -617,11 +618,11 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     // leaf types
     // TODO: verify correctness, need test cases for each    
     // TODO: Check if Builtin works
-    case TypeLoc::TypeLocClass::Builtin:
-    case TypeLoc::TypeLocClass::Enum:    
-    case TypeLoc::TypeLocClass::Record:
-    case TypeLoc::TypeLocClass::ObjCInterface:
-    case TypeLoc::TypeLocClass::TemplateTypeParm:
+    case TypeLoc::Builtin:
+    case TypeLoc::Enum:    
+    case TypeLoc::Record:
+    case TypeLoc::ObjCInterface:
+    case TypeLoc::TemplateTypeParm:
     {
       // skip if it's an anonymous type
       // read Clang`s definition (in RecordDecl) -- not exactly what you think
