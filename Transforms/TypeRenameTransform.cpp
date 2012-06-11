@@ -152,6 +152,11 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
         processDeclContext(RD);
       }
     }
+    else if (auto D = dyn_cast<ClassTemplateSpecializationDecl>(*I)) {
+      if (auto TSI = D->getTypeAsWritten()) {
+        processTypeLoc(TSI->getTypeLoc());
+      }
+    }
     else if (auto TD = dyn_cast<TagDecl>(*I)) {
       if (auto CRD = dyn_cast<CXXRecordDecl>(TD)) {
         // can't call bases_begin() if there's no definition
