@@ -30,6 +30,8 @@ Foo test(Foo *a) {
 
 ::SampleNameSpace::Foo globalFoo;
 
+#define TT Foo
+
 int main() {
   class Bar {
   public:
@@ -40,7 +42,12 @@ int main() {
   };
 
   Foo a = test();
+  TT c = a;
+
   Bar b;
+
   b.test();
+  
+  
   return a.getX();
 }

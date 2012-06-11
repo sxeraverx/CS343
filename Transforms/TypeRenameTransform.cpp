@@ -27,7 +27,7 @@ protected:
   // forceRewriteMacro is needed to handle expressions like VAArgExpr
   // TODO: be smart, if TL is not within a marco, it's do-able
   void processFunctionDecl(FunctionDecl *D);
-  void processTypeLoc(TypeLoc TL, bool forceRewriteMacro = false);
+  void processTypeLoc(TypeLoc TL, bool forceRewriteMacro = true);
   
   void processQualifierLoc(NestedNameSpecifierLoc NNSL,
                            bool forceRewriteMacro = false);
@@ -502,7 +502,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
   }
   
   // TODO: Take care of spelling loc finesses
-  BL = sema->getSourceManager().getSpellingLoc(BL);
+  // BL = sema->getSourceManager().getSpellingLoc(BL);
 
   pushIndent();
   auto QT = TL.getType();

@@ -73,7 +73,17 @@ protected:
     clang::FullSourceLoc FSL(L, SM);
     const clang::FileEntry *FE = SM.getFileEntryForID(FSL.getFileID());
     if (!FE) {
-      return true;
+      // attempt to get the spelling location
+      auto SL = SM.getSpellingLoc(L);
+      if (!SL.isValid()) {
+        return true;
+      }
+      
+      clang::FullSourceLoc FSL2(SL, SM);
+      FE = SM.getFileEntryForID(FSL2.getFileID());
+      if (!FE) {
+        return true;
+      }
     }
 
     auto FN = FE->getName();

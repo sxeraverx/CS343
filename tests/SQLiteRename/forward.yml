@@ -2,7 +2,8 @@
 Transforms:
   TypeRename:
     Types:
-      - struct sqlite3(\w*): sqlite4\1
+      - sqlite3: sqlite4
+      - sqlite3_stmt sqlite4_stmt
   FunctionRename:
     Functions:
       - sqlite3_(\w+): sqlite4_\1
