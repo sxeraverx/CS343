@@ -1,101 +1,112 @@
 
-## Dependencies
+# Refactorial
 
-*   LLVM + Clang
-*   libc++ (or libstdc++ for C++11)
+Refactoiral is a Clang-based refactoring tool for C, C++, Objective-C, and Objective-C++.
+
+## Install
+
+There are two ways to install Refactorial:
+
+*   Download a pre-built binary. Currently on Mac OS X only. Available soon.
+*   Build on your own. See below.
+
+## Building Refactorial
+
+We have built Refactorial on both Linux and Mac OS X.
+
+You need the following dependencies:
+
+*   LLVM and Clang
 *   yaml-cpp
 *   Boost (needed by yaml-cpp)
-*   pcrecpp (a part of the pcre library)
+*   pcre
 
-This project is written in C++11, and this may cause some issues with your existing library. Read on for building and installing the required dependencies.
+For LLVM and Clang, you need to build them from the latest source. *Using the
+built-in one that comes with Xcode 4.2 won't work*.
 
+Use the latest yaml-cpp from source (most binary distributions won't work).
+Get it from http://code.google.com/p/yaml-cpp/source/checkout
 
-## Build LLVM and Clang with CMake
+For Boost and pcre, you can install them in whatever way you like. Latest
+binary distribution versions will do.
 
-This project uses CMake, and it expects to find its dependencies via other CMake files.
+To build Refactorial, you need to use the latest Clang compiler. yaml-cpp uses
+templates extensively and some instantiations can't be compiled using older
+Clang versions. gcc should also work.
 
-Because of this, you also need to build LLVM and Clang with CMake. Here's what we use:
+Refactorial is written in C++11, although Clang will happily compile it
+even without turning on C++11 (we don't use that much other then `auto`).
+If you want to build Refactorial with C++11 on (`--std=c++0x`), you'll
+probably also need to build LLVM, Clang, yaml-cpp and pcre with the same
+option. Which can be a pain due to linkage issues.
 
-    # suppose you checked out llvm in ./llvm
-    mkdir build-llvm
-    cd build-llvm    
-    cmake ../llvm
+To build Refactorial, do this:
+
+    cmake .
     make
-    sudo make install
 
-If you're on Mac OS X, make sure you read the next section.
+If you're on OS X, the default is to use the Clang installed in
+`/usr/local`. This assumes you have built your own Clang (which is what we
+do).
 
+### Building Refactorial and Its Dependencies with C++11 Enabled
 
-## Prerequisites for Mac OS X
+You can safely skip this section.
 
-Since we use C++11, make sure your LLVM and Clang are built with the latest libc++ on Mac OS X.
+If you really want to build Refactorial with C++11 enabled, you will also need
+to install libc++ (rev 157242, recent versions won't work). Build all
+dependencies (all of them use CMake) with:
 
-Go to http://libcxx.llvm.org/ to check out a copy of the latest libc++.
-
-Then you need to build LLVW and Clang with the overridden compiler and linker settings. Here's what I do before running CMake:
-
-    # suppose you checked out llvm in ./llvm
-    mkdir build-llvm
-    cd build-llvm    
     cmake -DCMAKE_BUILD_TYPE:STRING=Release \
         -DCMAKE_CXX_FLAGS:STRING=-stdlib=libc++ \
         -DCMAKE_SHARED_LINKER_FLAGS:STRING=-stdlib=libc++ \
-        ../llvm
+        .
     make
     sudo make install
-    
-You probably noticed that we don't use `-std=c++0x` in `CXXFLAGS`. Parts of LLVM won't build with C++11 enabled.
 
-We also use yaml-cpp now. Check out the source at: http://code.google.com/p/yaml-cpp/source/checkout
+Then build Refactorial with:
 
-yaml-cpp uses Boost. You can use the one installed by MacPorts or any other package manager.
-
-Note that yaml-cpp **must be build with the Clang compiler you've built**! This is because the compiler that comes with Xcode has a bug (http://llvm.org/bugs/show_bug.cgi?id=13003) that cause it to fail compiling yaml-cpp.
-
-Use this to build yaml-cpp:
-
-    cmake -DCMAKE_CXX_FLAGS:STRING=-stdlib=libc++ \
+    cmake -DCMAKE_BUILD_TYPE:STRING=Release \
+        -DCMAKE_CXX_FLAGS:STRING="-stdlib=libc++ --std=c++0x" \
         -DCMAKE_SHARED_LINKER_FLAGS:STRING=-stdlib=libc++ \
-        -DCMAKE_C_COMPILER:STRING=/usr/local/bin/clang \
-        -DCMAKE_CXX_COMPILER:STRING=/usr/local/bin/clang++ \
         .
-
-For pcre (mainly for pcrecpp), you'll also need to use the CMake command
-above, but you don't have to override the compiler settings.
+    make
 
 
-## Generating `compile_commands.json`
+## Using Refactorial
+
+### Generating `compile_commands.json`
 
 Needed for your CMake projects.
-
-See http://scitools.com/blog/2012/04/cmake-and-understand.html for how to generate that file. Or you can do this:
 
     cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON <your build dir>
 
 
-## Testing ClassRenameTransform
+## Transforms Provided
 
-Use `test.sh`:
+Documentation upcoming.
 
-    cd tests/SimpleRename
-    ./test.sh
+## Copyright License
 
-Make sure you rebuild the main project (by regenerating the Makefile then make) first before testing.
+Copyright © 2012 Lukhnos Liu and Thomas Minor.
 
+MIT License:
 
-## MethodMoveTransform
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-MethodMoveTransform moves all method bodies in the designated class to the
-implementation file.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-*   Input: `BATCH_MOVE_CLASS_NAME`
-
-To test MethodMoveTransform:
-
-Use `test.sh`:
-
-    cd tests/MethodMove
-    ./test.sh
-
-Make sure you rebuild the main project (by regenerating the Makefile then make) first before testing.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
