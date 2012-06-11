@@ -110,8 +110,6 @@ public:
 						bin_op->getRHS()->printPretty(sstr, *ctx, 0, PrintingPolicy(ctx->getLangOpts()));
 						collect(bin_op->getRHS(), PM);
 						sstr << " );\n";
-						//rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), sstr.str());
-						//rewriter.ReplaceText(bin_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
 						insert(top_stmt_within_compound->getLocStart(), sstr.str());
 						replace(bin_op->getSourceRange(), base_sstr.str() + "." + getterName + "()");
 						
@@ -128,7 +126,6 @@ public:
 						collect(bin_op->getRHS(), PM);
 						bin_op->getRHS()->printPretty(sstr, *ctx, 0, PrintingPolicy(ctx->getLangOpts()));
 						sstr << " )";
-						//rewriter.ReplaceText(bin_op->getSourceRange(), sstr.str());
 						replace(bin_op->getSourceRange(), sstr.str());
 					}
 				}
@@ -138,7 +135,6 @@ public:
 					collect(bin_op->getRHS(), PM);
 					bin_op->getRHS()->printPretty(sstr, *ctx, 0, PrintingPolicy(ctx->getLangOpts()));
 					sstr << " )";
-					//rewriter.ReplaceText(bin_op->getSourceRange(), sstr.str());
 					replace(bin_op->getSourceRange(), sstr.str());
 				}
 			}
@@ -161,7 +157,7 @@ public:
 					top_stmt_within_compound = PM.getParent(top_stmt_within_compound);
 				const Stmt *top_stmt_or_compound = top_stmt_within_compound;
 				if(isa<CompoundStmt>(PM.getParent(top_stmt_within_compound)))
-					top_stmt_within_compound = PM.getParent(top_stmt_within_compound);
+					top_stmt_or_compound = PM.getParent(top_stmt_within_compound);
 				
 				string base_str;
 				llvm::raw_string_ostream base_sstr(base_str);
@@ -204,21 +200,17 @@ public:
 						   || if_stmt->getElse() == top_stmt_or_compound)
 						{
 							if(onlyExpr)
-								//rewriter.ReplaceText(un_op->getSourceRange(), incrStmt);
 								replace(un_op->getSourceRange(), incrStmt);
 							else
 							{
-								//rewriter.ReplaceText(un_op->getSourceRange(), getStmt);
 								replace(un_op->getSourceRange(), getStmt);
 								if(un_op->isPrefix())
 								{
-									//rewriter.InsertTextBefore(un_op->getLocStart(), incrStmt + ";\n");
 									insert(un_op->getLocStart(), incrStmt + ";\n");
 								}
 								else
 								{
 									assert(un_op->isPostfix());
-									//rewriter.InsertTextAfterToken(un_op->getLocEnd(), ";\n" + incrStmt);
 									insert(findLocAfterSemi(un_op->getLocEnd()), incrStmt + ";\n");
 								}
 								if(onlyStmt)
@@ -231,13 +223,11 @@ public:
 							assert(if_stmt->getCond() == top_stmt_within_compound);
 							if(un_op->isPrefix())
 							{
-								//rewriter.InsertTextBefore(if_stmt->getLocStart(), incrStmt);
 								insert(if_stmt->getLocStart(), incrStmt);
 							}
 							else
 							{
 								assert(un_op->isPostfix());
-								//rewriter.InsertTextAfter(if_stmt->getLocEnd(), incrStmt);
 								insert(if_stmt->getLocEnd(), incrStmt);
 							}
 							if(onlyStmt)
@@ -249,21 +239,17 @@ public:
 						if(for_stmt->getBody() == top_stmt_or_compound)
 						{
 							if(onlyExpr)
-								//rewriter.ReplaceText(un_op->getSourceRange(), incrStmt);
 								replace(un_op->getSourceRange(), incrStmt);
 							else
 							{
-								//rewriter.ReplaceText(un_op->getSourceRange(), getStmt);
 								replace(un_op->getSourceRange(), getStmt);
 								if(un_op->isPrefix())
 								{
-									//rewriter.InsertTextBefore(un_op->getLocStart(), incrStmt + ";\n");
 									insert(un_op->getLocStart(), incrStmt);
 								}
 								else
 								{
 									assert(un_op->isPostfix());
-									//rewriter.InsertTextAfterToken(un_op->getLocEnd(), ";\n" + incrStmt);
 									insert(un_op->getLocEnd(), incrStmt);
 								}
 								if(onlyStmt)
@@ -274,25 +260,24 @@ public:
 						{
 							assert(onlyStmt); //no blocks in initializer
 							if(onlyExpr)
-								//rewriter.ReplaceText(un_op->getSourceRange(), incrStmt);
 								replace(un_op->getSourceRange(), incrStmt);
 							else
 							{
-								//rewriter.InsertTextBefore(for_stmt->getLocStart(), incrStmt);
 								insert(for_stmt->getLocStart(), incrStmt + ";\n");
 								if(un_op->isPostfix())
 									//not sure if this is legit, but i can't think of a better way
-									//rewriter.ReplaceText(un_op->getSourceRange(), "(" + getStmt + " - 1)");
 									replace(un_op->getSourceRange(), "(" + getStmt + " - 1)");
 								else
-									//rewriter.ReplaceText(un_op->getSourceRange(), getStmt);
 									replace(un_op->getSourceRange(), getStmt );
 							}
 						}
 						else if( for_stmt->getInc() == top_stmt_within_compound )
 						{
 							assert(onlyStmt); //no blocks in increment
-							
+							if(onlyExpr)
+							{
+								replace(top_stmt_within_compound->getSourceRange(), incrStmt);
+							}
 						}
 						else
 						{
@@ -342,10 +327,8 @@ public:
 						                              }*/
 					if(needToInsertBraces)
 					{
-						//rewriter.InsertTextBefore(top_stmt_within_compound->getLocStart(), "{\n");
 						insert(top_stmt_within_compound->getLocStart(), "{\n");
 						SourceLocation locAfterSemi = findLocAfterToken(top_stmt_or_compound->getLocEnd(), tok::semi);
-						//rewriter.InsertTextAfterToken(locAfterSemi, "\n}");
 						insert(locAfterSemi, "}\n");
 					}
 				}
@@ -371,7 +354,6 @@ public:
 				string setterName = "set" + mem_expr->getMemberDecl()->getNameAsString();
 				setterName[3] = toupper(setterName[3]);
 				sstr << base_sstr.str() << "." << getterName << "()";
-				//rewriter.ReplaceText(mem_expr->getSourceRange(), sstr.str());
 				replace(mem_expr->getSourceRange(), sstr.str());
 			}
 		}
@@ -423,7 +405,6 @@ void insertAccessors() {
 		if(!hasUserDefinedMethods)
 		{
 			loc = parent->getRBraceLoc();
-			//rewriter.InsertTextBefore(parent->getRBraceLoc(), sstr.str());
 			insert(parent->getRBraceLoc(), sstr.str());
 		}
 		else
@@ -443,7 +424,6 @@ void insertAccessors() {
 					break;
 				++lastMethod;
 			} while(1);
-			//rewriter.InsertTextAfterToken(loc, sstr.str());
 			insert(loc, sstr.str());
 		}
 	}

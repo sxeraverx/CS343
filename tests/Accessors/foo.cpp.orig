@@ -10,12 +10,19 @@ int main(void)
 	foo.x = 1;
 	cout << foo.x << endl;
 	foo.Foo::x += 1;
+	cout << foo.x << endl;
 	int y;
 	if(foo.x)
 		y = foo.x++;
 	else {
 		foo.x--;
 	}
+	cout << foo.x << endl;
+	for(foo.x = 0; foo.x < 10; foo.x++)
+		cout << foo.x << endl;
+	cout << foo.x << endl;
 	foo.x <<= 1;
-	int z = (foo.x+=1+foo.x);
+	cout << foo.x << endl;
+	int z = (foo.x+=10);
+	cout << foo.x << endl;
 }
