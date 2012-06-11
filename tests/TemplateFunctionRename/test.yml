@@ -1,0 +1,5 @@
+---
+Transforms:
+  TypeRename:
+    Types:
+      - class A::Foo: Foobar
