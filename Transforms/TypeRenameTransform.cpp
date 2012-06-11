@@ -85,9 +85,6 @@ void TypeRenameTransform::collectRenameDecls(DeclContext *DC, bool topLevel)
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
     auto L = (*I)->getLocation();
-    if (topLevel && shouldIgnore(L)) {
-      continue;
-    }
     
     if (auto TD = dyn_cast<TagDecl>(*I)) {
       std::string newName;

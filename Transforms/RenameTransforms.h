@@ -207,6 +207,10 @@ protected:
         }
       }
       
+      if (shouldIgnore(L)) {
+        return;
+      }
+      
       clang::Preprocessor &P = sema->getPreprocessor();      
       auto LE = P.getLocForEndOfToken(L);
       if (LE.isValid()) {
