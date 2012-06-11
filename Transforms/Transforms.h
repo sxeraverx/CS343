@@ -16,6 +16,7 @@
 #include "Refactoring.h"
 
 #include <yaml-cpp/yaml.h>
+#include "yaml-util.h"
 
 class Transform : public clang::SemaConsumer
 {
@@ -27,6 +28,9 @@ protected:
 	void replace(clang::SourceRange range, std::string text);
 	clang::SourceLocation findLocAfterToken(clang::SourceLocation curLoc, clang::tok::TokenKind tok) {
 		return clang::Lexer::findLocationAfterToken(curLoc, tok, sema->getSourceManager(), sema->getLangOpts(), true);
+	}
+	clang::SourceLocation getLocForEndOfToken(clang::SourceLocation curLoc) {
+		return clang::Lexer::getLocForEndOfToken(curLoc, 0, sema->getSourceManager(), sema->getLangOpts());
 	}
 	clang::SourceLocation findLocAfterSemi(clang::SourceLocation curLoc) {return findLocAfterToken(curLoc, clang::tok::semi);}
 };

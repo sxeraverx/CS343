@@ -1,5 +1,6 @@
 
 #include <yaml-cpp/yaml.h>
+#include "yaml-util.h"
 
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/AST.h"
@@ -18,14 +19,7 @@
 using namespace clang;
 using namespace std;
 
-
 #include "Transforms/Transforms.h"
-
-template<>
-struct YAML::convert<YAML::Node> {
-	static YAML::Node encode(const YAML::Node& rhs) {return rhs;}
-	static bool decode(const YAML::Node& node, YAML::Node& rhs) {rhs=node; return true;}
-};
 
 int main(int argc, char **argv)
 {	

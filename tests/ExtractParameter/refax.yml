@@ -1,0 +1,6 @@
+---
+Transforms:
+  ExtractParameter:
+    - method: Foo::do_foo
+      variable: bar
+      default: 0
