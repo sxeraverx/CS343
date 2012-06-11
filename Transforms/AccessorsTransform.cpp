@@ -15,7 +15,7 @@ private:
 	ASTContext *ctx;
 public:
 	void HandleTranslationUnit(ASTContext &Ctx) override {
-		fields = TransformRegistry::get().config["Accessors"].as<decltype(fields)>();
+		fields = TransformRegistry::get().config["Accessors"].as<list<string> >();
 		ctx = &Ctx;
 		collect(ctx->getTranslationUnitDecl());
 		insertAccessors();
@@ -52,7 +52,7 @@ public:
 			if(const CXXRecordDecl *rc_decl = dyn_cast<CXXRecordDecl>(*subdecl)) {
 				for(auto member = rc_decl->field_begin(); member != rc_decl->field_end(); member++)
 					if(find(fields.begin(), fields.end(), member->getQualifiedNameAsString())!=fields.end())
-						fieldRanges[member->getQualifiedNameAsString()] = member.operator*();
+            fieldRanges[member->getQualifiedNameAsString()] = *member;
 			}
 			if(const FunctionDecl *fn_decl = dyn_cast<FunctionDecl>(*subdecl)) {
 				if(fn_decl->getNameAsString() != "main")

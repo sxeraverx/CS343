@@ -9,7 +9,9 @@
 
 #include "Transforms.h"
 #include "RenameTransforms.h"
+#include <clang/AST/DeclFriend.h>
 #include <clang/AST/DeclTemplate.h>
+#include <clang/AST/TypeLoc.h>
 
 using namespace clang;
 
@@ -24,6 +26,7 @@ protected:
   
   // forceRewriteMacro is needed to handle expressions like VAArgExpr
   // TODO: be smart, if TL is not within a marco, it's do-able
+  void processFunctionDecl(FunctionDecl *D);
   void processTypeLoc(TypeLoc TL, bool forceRewriteMacro = false);
   
   void processQualifierLoc(NestedNameSpecifierLoc NNSL,
@@ -39,13 +42,13 @@ private:
 
 // will be undefined by clang/AST/TypeNodes.def
 #define ABSTRACT_TYPE(Class, Base)
-#define TYPE(Class, Base) case TypeLoc::TypeLocClass::Class: \
+#define TYPE(Class, Base) case TypeLoc::Class: \
     sst << #Class; \
     break;
 
     switch(C) {
       #include <clang/AST/TypeNodes.def>
-      case TypeLoc::TypeLocClass::Qualified:
+      case TypeLoc::Qualified:
         sst << "Qualified";
         break;
     }
@@ -83,9 +86,6 @@ void TypeRenameTransform::collectRenameDecls(DeclContext *DC, bool topLevel)
   
   for(auto I = DC->decls_begin(), E = DC->decls_end(); I != E; ++I) {
     auto L = (*I)->getLocation();
-    if (topLevel && shouldIgnore(L)) {
-      continue;
-    }
     
     if (auto TD = dyn_cast<TagDecl>(*I)) {
       std::string newName;
@@ -143,118 +143,49 @@ void TypeRenameTransform::processDeclContext(DeclContext *DC, bool topLevel)
     if (topLevel && shouldIgnore(L)) {
       continue;
     }
+    
+    // llvm::errs() << indent() << (*I)->getDeclKindName() << ", at: " << loc(L) << "\n";
 
     if (auto D = dyn_cast<ClassTemplateDecl>(*I)) {
       auto TD = D->getTemplatedDecl();
       if (auto RD = dyn_cast<CXXRecordDecl>(TD)) {
+        // we need to descend on our own      
         processDeclContext(RD);
+      }
+    }
+    else if (auto D = dyn_cast<ClassTemplateSpecializationDecl>(*I)) {
+      if (auto TSI = D->getTypeAsWritten()) {
+        processTypeLoc(TSI->getTypeLoc());
       }
     }
     else if (auto TD = dyn_cast<TagDecl>(*I)) {
       if (auto CRD = dyn_cast<CXXRecordDecl>(TD)) {
         // can't call bases_begin() if there's no definition
         if (CRD->hasDefinition()) {        
-          for (auto BI = CRD->bases_begin(), BE = CRD->bases_end(); BI != BE; ++BI) {
+          for (auto BI = CRD->bases_begin(), BE = CRD->bases_end();
+               BI != BE; ++BI) {
             if (auto TSI = BI->getTypeSourceInfo()) {
               processTypeLoc(TSI->getTypeLoc());
             }
           }
+          
+          for (auto FI = CRD->friend_begin(), FE = CRD->friend_end();
+               FI != FE; ++FI) {
+            if (auto TSI = (*FI)->getFriendType()) {
+              processTypeLoc(TSI->getTypeLoc());
+            }            
+          }
         }
       } // if a CXXRecordDecl
     }
+    else if (auto D = dyn_cast<FunctionTemplateDecl>(*I)) {
+      processFunctionDecl(D->getTemplatedDecl());
+      
+      // we need to descend on our own
+      processDeclContext(D->getTemplatedDecl());
+    }    
     else if (auto D = dyn_cast<FunctionDecl>(*I)) {
-      // if no type source info, it's a void f(void) function
-      auto TSI = D->getTypeSourceInfo();
-      if (TSI) {      
-        processTypeLoc(TSI->getTypeLoc());
-      }
-
-      // handle ctor name initializers
-      if (auto CD = dyn_cast<CXXConstructorDecl>(D)) {
-        auto BL = CD->getLocation();
-        std::string newName;
-        if (BL.isValid() && CD->getParent()->getLocation() != BL && 
-            nameMatches(CD->getParent(), newName, true)) {
-          renameLocation(BL, newName);
-        }
-        
-        for (auto II = CD->init_begin(), IE = CD->init_end(); II != IE; ++II) {
-          auto X = (*II)->getInit();
-          if (X) {
-            processStmt(X);
-          }
-        }
-      }
-      
-      // dtor
-      if (auto DD = dyn_cast<CXXDestructorDecl>(D)) {
-        // if parent matches
-        auto BL = DD->getLocation();
-        std::string newName;
-        auto P = DD->getParent();
-        if (BL.isValid() && P->getLocation() != BL &&
-            nameMatches(P, newName, true)) {
-        
-          // can't use renameLocation since this is a tricy case        
-        
-          // need to use raw_identifier because Lexer::findLocationAfterToken
-          // performs a raw lexing
-          SourceLocation EL =
-            Lexer::findLocationAfterToken(BL, tok::raw_identifier,
-                                          sema->getSourceManager(),
-                                          sema->getLangOpts(), false);
-
-
-          // TODO: Find the right way to do this -- consider this a hack
-
-          // llvm::errs() << indent() << "dtor at: " << loc(BL) << ", locStart: " << loc(DD->getLocStart())
-          //   << ", nameAsString: " << P->getNameAsString() << ", len: " << P->getNameAsString().size()
-          //   << ", DD nameAsString: " << DD->getNameAsString() << ", len: " << DD->getNameAsString().size()
-          //   << "\n";
-            
-          if (EL.isValid()) {
-            // EL is 1 char after the dtor name ~Foo, so -1 == pos of 'o'
-            SourceLocation NE = EL.getLocWithOffset(-1);
-            
-            // we use the parent's name to see how much we should back off
-            // if we use  D->getNameAsString(), we'd run into two problems:
-            //   (1) the name would be ~Foo
-            //   (2) the name for template class dtor would be ~Foo<T>
-            SourceLocation NB =
-              EL.getLocWithOffset(-(int)P->getNameAsString().size());
-
-            if (NB.isMacroID()) {
-              // TODO: emit error
-              llvm::errs() << "Warning: Token is resulted from macro expansion"
-                " and is therefore not renamed, at: " << loc(NB) << "\n";
-            }
-            else {
-            // TODO: Determine if it's a wrtiable file
-        
-            // TODO: Determine if the location has already been touched or
-            // needs skipping (such as in refactoring API user's code, then
-            // the API headers need no changing since later the new API will be
-            // in place)              
-              replace(SourceRange(NB, NE), newName);
-            }
-          }
-        }
-      }
-      
-      // rename the params' types
-      for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
-        processParmVarDecl(*PI);
-      }
-      
-      // the name itself
-      processQualifierLoc(D->getQualifierLoc());
-      
-      // handle body
-      if (auto B = D->getBody()) {
-        if (stmtInSameFileAsDecl(B, D)) {
-          processStmt(B);
-        }
-      }
+      processFunctionDecl(D);
     }
     else if (auto D = dyn_cast<VarDecl>(*I)) {
       if (auto TSI = D->getTypeSourceInfo()) {
@@ -386,6 +317,26 @@ void TypeRenameTransform::processStmt(Stmt *S)
       processTypeLoc(TSI->getTypeLoc());  
     }
   }
+  else if (auto E = dyn_cast<CXXUnresolvedConstructExpr>(S)) {
+    if (auto TSI = E->getTypeSourceInfo()) {
+      processTypeLoc(TSI->getTypeLoc());  
+    }
+    
+//     std::string newName;
+//     
+//     auto NC = E->getNamingClass();
+//     auto D = dyn_cast<Decl>(NC);
+//     if (D) {
+//       llvm::errs() << indent() << D->getDeclKindName() << ", at: " << loc(D->getLocation()) << "\n";
+//     }
+//     
+//     llvm::errs() << indent() << "UnresolvedLookupExpr, NC: " << (void*)NC << ", range: " << range(E->getSourceRange()) << "\n";
+//     
+//     if (nameMatches(E->getNamingClass(), newName)) {
+//       llvm::errs() << indent() << "matches: " << newName << ", range: " << range(E->getSourceRange()) << "\n";      
+// //      renameLocation(E->getProtocolIdLoc(), newName);
+//     }    
+  }
   else if (auto E = dyn_cast<VAArgExpr>(S)) {
     // TODO: This will be a problem if the arg is also a macro expansion...
     processTypeLoc(E->getWrittenTypeInfo()->getTypeLoc(), true);  
@@ -429,6 +380,108 @@ void TypeRenameTransform::processStmt(Stmt *S)
   popIndent();
 }
 
+void TypeRenameTransform::processFunctionDecl(FunctionDecl *D)
+{
+  // if no type source info, it's a void f(void) function
+  auto TSI = D->getTypeSourceInfo();
+  if (TSI) {      
+    processTypeLoc(TSI->getTypeLoc());
+  }
+
+  // handle ctor name initializers
+  if (auto CD = dyn_cast<CXXConstructorDecl>(D)) {
+    auto BL = CD->getLocation();
+    std::string newName;
+    if (BL.isValid() && CD->getParent()->getLocation() != BL && 
+        nameMatches(CD->getParent(), newName, true)) {
+      renameLocation(BL, newName);
+    }
+    
+    for (auto II = CD->init_begin(), IE = CD->init_end(); II != IE; ++II) {
+      if ((*II)->isBaseInitializer()) {
+        processTypeLoc((*II)->getBaseClassLoc());        
+      }
+      
+      auto X = (*II)->getInit();
+      if (X) {
+        processStmt(X);
+      }
+    }
+  }
+  
+  // dtor
+  if (auto DD = dyn_cast<CXXDestructorDecl>(D)) {
+    // if parent matches
+    auto BL = DD->getLocation();
+    std::string newName;
+    auto P = DD->getParent();
+    if (BL.isValid() && P->getLocation() != BL &&
+        nameMatches(P, newName, true)) {
+    
+      // can't use renameLocation since this is a tricy case        
+    
+      // need to use raw_identifier because Lexer::findLocationAfterToken
+      // performs a raw lexing
+      SourceLocation EL =
+        Lexer::findLocationAfterToken(BL, tok::raw_identifier,
+                                      sema->getSourceManager(),
+                                      sema->getLangOpts(), false);
+
+
+      // TODO: Find the right way to do this -- consider this a hack
+
+      // llvm::errs() << indent() << "dtor at: " << loc(BL) << ", locStart: " << loc(DD->getLocStart())
+      //   << ", nameAsString: " << P->getNameAsString() << ", len: " << P->getNameAsString().size()
+      //   << ", DD nameAsString: " << DD->getNameAsString() << ", len: " << DD->getNameAsString().size()
+      //   << "\n";
+        
+      if (EL.isValid()) {
+        // EL is 1 char after the dtor name ~Foo, so -1 == pos of 'o'
+        SourceLocation NE = EL.getLocWithOffset(-1);
+        
+        // we use the parent's name to see how much we should back off
+        // if we use  D->getNameAsString(), we'd run into two problems:
+        //   (1) the name would be ~Foo
+        //   (2) the name for template class dtor would be ~Foo<T>
+        SourceLocation NB =
+          EL.getLocWithOffset(-(int)P->getNameAsString().size());
+
+        if (NB.isMacroID()) {
+          // TODO: emit error
+          llvm::errs() << "Warning: Token is resulted from macro expansion"
+            " and is therefore not renamed, at: " << loc(NB) << "\n";
+        }
+        else {
+        // TODO: Determine if it's a wrtiable file
+    
+        // TODO: Determine if the location has already been touched or
+        // needs skipping (such as in refactoring API user's code, then
+        // the API headers need no changing since later the new API will be
+        // in place)              
+          replace(SourceRange(NB, NE), newName);
+        }
+      }
+    }
+  }
+  
+  // rename the params' types
+  for (auto PI = D->param_begin(), PE = D->param_end(); PI != PE; ++PI) {
+    processParmVarDecl(*PI);
+  }
+  
+  // the name itself
+  processQualifierLoc(D->getQualifierLoc());
+  
+  // handle body
+  
+  if (auto B = D->getBody()) {
+    if (stmtInSameFileAsDecl(B, D)) {
+      // llvm::errs() << indent() << "body? " << D->getBody() << "\n";
+      processStmt(B);
+    }
+  }  
+}
+
 void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
 {
   if (TL.isNull()) {
@@ -437,14 +490,14 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
   
   auto BL = TL.getBeginLoc();
   
-  // TODO: ignore system headers
+  // ignore system headers
+  if (shouldIgnore(BL)) {
+    return;
+  }
   
   // is a result from macro expansion? sorry...
   if (BL.isMacroID() && !forceRewriteMacro) {
-    
-    // TODO: emit error diagnostics
-    
-    // llvm::errs() << "Cannot rename type from macro expansion at: " << loc(BL) << "\n";
+    llvm::errs() << "Cannot rename type from macro expansion at: " << loc(BL) << "\n";
     return;
   }
   
@@ -453,7 +506,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
 
   pushIndent();
   auto QT = TL.getType();
-    
+
   // llvm::errs() << indent()
   //   << "TypeLoc"
   //   << ", typeLocClass: " << typeLocClassName(TL.getTypeLocClass())
@@ -462,7 +515,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
   //   << "\n";
     
   switch(TL.getTypeLocClass()) {    
-    case TypeLoc::TypeLocClass::FunctionProto:
+    case TypeLoc::FunctionProto:
     {
       if (auto FTL = dyn_cast<FunctionTypeLoc>(&TL)) {
         for (unsigned I = 0, E = FTL->getNumArgs(); I != E; ++I) {
@@ -475,7 +528,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     // for example, the elaborated type loc of "A::B::C" is A::B
     // we need to know if A::B and A are types we are renaming
     // (so that we can handle nested classes, in-class typedefs, etc.)
-    case TypeLoc::TypeLocClass::Elaborated:
+    case TypeLoc::Elaborated:
     {
       if (auto ETL = dyn_cast<ElaboratedTypeLoc>(&TL)) {
         processQualifierLoc(ETL->getQualifierLoc(), forceRewriteMacro);
@@ -483,7 +536,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
-    case TypeLoc::TypeLocClass::ObjCObject:
+    case TypeLoc::ObjCObject:
     {
       if (auto OT = dyn_cast<ObjCObjectTypeLoc>(&TL)) {
         for (unsigned I = 0, E = OT->getNumProtocols(); I != E; ++I) {
@@ -498,7 +551,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
-    case TypeLoc::TypeLocClass::InjectedClassName:
+    case TypeLoc::InjectedClassName:
     {
       if (auto TSTL = dyn_cast<InjectedClassNameTypeLoc>(&TL)) {
         auto CD = TSTL->getDecl();
@@ -510,7 +563,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
       break;
     }
     
-    case TypeLoc::TypeLocClass::TemplateSpecialization:
+    case TypeLoc::TemplateSpecialization:
     {
       if (auto TSTL = dyn_cast<TemplateSpecializationTypeLoc>(&TL)) {
         
@@ -535,7 +588,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
           // (we skip things like Foo<1> )
           auto AL = TSTL->getArgLoc(I);
           auto A = AL.getArgument();
-          if (A.getKind() != TemplateArgument::ArgKind::Type) {
+          if (A.getKind() != TemplateArgument::Type) {
             continue;
           }
           
@@ -548,7 +601,7 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     }
     
     // typedef is tricky
-    case TypeLoc::TypeLocClass::Typedef:
+    case TypeLoc::Typedef:
     {
       auto T = TL.getTypePtr();
       if (auto TDT = dyn_cast<TypedefType>(T)) {
@@ -565,11 +618,11 @@ void TypeRenameTransform::processTypeLoc(TypeLoc TL, bool forceRewriteMacro)
     // leaf types
     // TODO: verify correctness, need test cases for each    
     // TODO: Check if Builtin works
-    case TypeLoc::TypeLocClass::Builtin:
-    case TypeLoc::TypeLocClass::Enum:    
-    case TypeLoc::TypeLocClass::Record:
-    case TypeLoc::TypeLocClass::ObjCInterface:
-    case TypeLoc::TypeLocClass::TemplateTypeParm:
+    case TypeLoc::Builtin:
+    case TypeLoc::Enum:    
+    case TypeLoc::Record:
+    case TypeLoc::ObjCInterface:
+    case TypeLoc::TemplateTypeParm:
     {
       // skip if it's an anonymous type
       // read Clang`s definition (in RecordDecl) -- not exactly what you think

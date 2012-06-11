@@ -2,5 +2,9 @@
 Transforms:
   TypeRename:
     Types:
-      - sqlite3: SequelLiteThree
+      - struct sqlite3(\w*): sqlite4\1
+  FunctionRename:
+    Functions:
+      - sqlite3_(\w+): sqlite4_\1
     
+

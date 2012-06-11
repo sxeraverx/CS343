@@ -32,6 +32,9 @@ protected:
 	// TODO: move these to a utility
 	std::string captureSourceText(SourceLocation B, SourceLocation E,
 	                              bool endBeyondToken = false);
+	                              
+  std::string removeHeadIndent(const std::string& src);
+  static std::vector<std::string> split(const std::string& text, char c);
 };
 
 REGISTER_TRANSFORM(MethodMoveTransform);
@@ -125,7 +128,7 @@ void MethodMoveTransform::processCXXRecordDecl(CXXRecordDecl *CRD)
 			continue;
 		}
     
-		std::string&& B = rewriteMethodInHeader(MI.operator*());
+		std::string B = rewriteMethodInHeader(*MI);
 		aggregateSource += B;
 		aggregateSource += "\n";
 	}
@@ -267,7 +270,10 @@ std::string MethodMoveTransform::rewriteMethodInHeader(CXXMethodDecl *M)
 	// we capture everything between the location past the method's type
 	// and the right brace of the body, inclusive; this has a desired side
 	// effect: the ctor's initializers (if exist) will also be included
-	sst << captureSourceText(MTLE, MBE);
+  auto capturedSrc = captureSourceText(MTLE, MBE);
+  auto reformattedSrc = removeHeadIndent(capturedSrc);
+	
+  sst << reformattedSrc;
 	sst << "\n";
 
 	// replace the body with ;
@@ -288,3 +294,128 @@ std::string MethodMoveTransform::captureSourceText(SourceLocation B,
 	return std::string(cdataBegin,
 	                   cdataEnd - cdataBegin + (endBeyondToken ? 0 : 1));
 }
+
+std::string MethodMoveTransform::removeHeadIndent(const std::string& src)
+{
+  std::string newSrc;
+  std::string result;
+
+  bool hasInitializer = false;
+  // always see if it's an initializer and see if it has some leading space
+
+  for (auto SI = src.begin(), SE = src.end(); SI != SE; ++SI) {
+    auto c = *SI;
+    if (c != ' ' && c != '\t') {
+      newSrc.insert(newSrc.end(), SI, SE);
+      break;
+    }
+  }
+  
+  if (!newSrc.size()) {
+    return result;
+  }
+  
+  if (newSrc[0] == ':') {
+    hasInitializer = true;
+  }
+  
+
+  size_t tabSize = 2;
+  std::vector<int> indentPos;
+  std::vector<std::string> lines = split(newSrc, '\n');
+  
+  size_t minHeadIndent = tabSize * 100;
+  for (auto I = lines.begin(), E = lines.end(); I != E; ++I) {
+    std::string &S = *I;
+    
+    llvm::errs() << "src: " << *I << "\n";
+    
+    size_t ws = 0;
+    for (auto SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
+      auto c = *SI;
+      if (c != ' ' && c != '\t') {
+        break;
+      }
+      
+      if (c == ' ') {
+        ws++;
+      }
+      else {
+        size_t rm = ws % tabSize;
+        ws += (rm ? rm : tabSize);
+      }
+    }
+    
+    if (ws && ws < minHeadIndent) {
+      minHeadIndent = ws;
+    }
+  }
+
+
+  if (minHeadIndent < tabSize) {
+    minHeadIndent = tabSize;
+  }
+
+  llvm::errs() << "min head indent: " << minHeadIndent << "\n";
+
+  for (auto I = lines.begin(), E = lines.end(); I != E; ++I) {
+    std::string &S = *I;
+    
+    size_t ws = 0;
+    for (auto SI = S.begin(), SE = S.end(); SI != SE; ++SI) {
+      auto c = *SI;
+      
+      if ((ws && ws >= minHeadIndent) || (c != ' ' && c != '\t')) {
+        result.insert(result.end(), SI, SE);
+        break;
+      }
+      
+      if (c == ' ') {
+        ws++;
+      }
+      else {
+        size_t rm = ws % tabSize;
+        ws += (rm ? rm : tabSize);
+      }
+    }
+    
+    auto J = I;
+    if (++J != lines.end()) {
+      result += "\n";
+    }
+  }
+  
+  if (hasInitializer) {
+    result.insert(0, std::string(tabSize, ' '));
+  }
+
+  result.insert(0, "\n");
+  
+  return result;
+}
+
+std::vector<std::string> MethodMoveTransform::split(const std::string& text,
+                                                    char c)
+{
+    std::vector<std::string> result;
+    size_t index = 0, last = 0, length = text.length();
+    while (index < length) {
+        while (index < length) {
+            if (text[index] == c) {
+                result.push_back(text.substr(last, index - last));
+                last = index + 1;
+                break;
+            }
+            index++;            
+        }
+
+        index++;
+    }
+
+    if (last <= index) {
+        result.push_back(text.substr(last, index - last));           
+    }
+
+    return result;
+}                                
+
