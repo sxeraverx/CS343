@@ -1,15 +1,22 @@
 
 # Refactorial
 
-Refactoiral is a Clang-based refactoring tool for C, C++, Objective-C, and Objective-C++.
+Refactoiral is a Clang-based refactoring tool for C, C++, Objective-C, and Objective-C++. It has a number of nice properties:
 
-## Install
+1.  It runs independent of any IDE
+2.  It refactors C, C++, Objective-C and Objective-C++ programs
+3.  It can refactor both a library and its clients using the same script, so that library developers can upgrade libraries more easily by distributing the script
+4.  It is extensible
+
+
+## Installation
 
 There are two ways to install Refactorial:
 
 *   Download a pre-built binary. Currently on Mac OS X only. Get it here:
     https://github.com/lukhnos/refactorial/downloads
 *   Build on your own. See below.
+
 
 ## Building Refactorial
 
@@ -49,6 +56,7 @@ To build Refactorial, do this:
 If you're on OS X, the default is to use the Clang installed in
 `/usr/local`. This assumes you have built your own Clang (which is what we
 do).
+
 
 ### Building Refactorial and Its Dependencies with C++11 Enabled
 
@@ -103,7 +111,43 @@ That's something that we need to work on.
 *   RecordFieldRename: Rename record fields, including C++ member variables
 *   FunctionRename: Rename functions, including C++ member functions
 
-Documentation upcoming. Before that, take a look at our test cases in
+You tell Refactorial using a YAML config file. For example, to rename all
+classes with the prefix `Tree` to `Trie`, you can write a `refactor.yml` like
+this:
+
+    ---
+    Transforms:        
+      TypeRename:
+        Ignore:
+          - /usr/.*
+          - /opt/.*
+        Types:
+          - class Tree(.*): Trie\1
+          
+Here `\1` is the regular expression capture directive.
+
+Then, in your build directory (where you have the compilation database), run:
+
+    refactorial < refactor.yml
+    
+Refactorial will then run the TypeRename transform on all source files in your
+project.
+
+If you only need to refactor some of the files, you can say:
+
+    ---
+    Files:
+      - foo.cpp
+      - bar.cpp
+    Transforms:        
+      TypeRename:
+        Ignore:
+          - /usr/.*
+          - /opt/.*
+        Types:
+          - class Tree(.*): Trie\1
+
+More documentation upcoming. Before that, take a look at our test cases in
 `tests/`. You can get an idea what each source transform does and which
 parameters they take.
 
