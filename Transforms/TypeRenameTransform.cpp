@@ -306,6 +306,16 @@ void TypeRenameTransform::processStmt(Stmt *S)
       // llvm::errs() << indent() << D->getDeclKindName() << "\n";
     }
   }
+  if (auto E = dyn_cast<MemberExpr>(S)) {
+    if (E->hasExplicitTemplateArgs()) {
+      
+      unsigned N = E->getNumTemplateArgs();
+      auto TAL = E->getTemplateArgs();
+      for (unsigned I = 0; I < N; ++I) {
+        processTypeLoc(TAL[I].getTypeSourceInfo()->getTypeLoc());
+      }
+    }
+  }
   else if (auto E = dyn_cast<CXXNewExpr>(S)) {
     processTypeLoc(E->getAllocatedTypeSourceInfo()->getTypeLoc());  
   }
@@ -321,21 +331,6 @@ void TypeRenameTransform::processStmt(Stmt *S)
     if (auto TSI = E->getTypeSourceInfo()) {
       processTypeLoc(TSI->getTypeLoc());  
     }
-    
-//     std::string newName;
-//     
-//     auto NC = E->getNamingClass();
-//     auto D = dyn_cast<Decl>(NC);
-//     if (D) {
-//       llvm::errs() << indent() << D->getDeclKindName() << ", at: " << loc(D->getLocation()) << "\n";
-//     }
-//     
-//     llvm::errs() << indent() << "UnresolvedLookupExpr, NC: " << (void*)NC << ", range: " << range(E->getSourceRange()) << "\n";
-//     
-//     if (nameMatches(E->getNamingClass(), newName)) {
-//       llvm::errs() << indent() << "matches: " << newName << ", range: " << range(E->getSourceRange()) << "\n";      
-// //      renameLocation(E->getProtocolIdLoc(), newName);
-//     }    
   }
   else if (auto E = dyn_cast<VAArgExpr>(S)) {
     // TODO: This will be a problem if the arg is also a macro expansion...

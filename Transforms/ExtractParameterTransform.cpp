@@ -7,8 +7,6 @@ using namespace std;
 
 
 class ExtractParameterTransform : public Transform {
-  typedef vector<YAML::Node> YAMLNodeVector;
-  
 public:  
 	virtual void HandleTranslationUnit(ASTContext &C) override;
 	
@@ -94,7 +92,7 @@ void ExtractParameterTransform::process()
 			SourceLocation lParenLoc = dyn_cast<FunctionTypeLoc>(&TL)->getLocalRangeBegin();
 			insertionLoc = getLocForEndOfToken(lParenLoc);
 		}
-		YAMLNodeVector transformData = TransformRegistry::get().config["ExtractParameter"].as<YAMLNodeVector>();
+		vector<YAML::Node> transformData = TransformRegistry::get().config["ExtractParameter"].as<vector<YAML::Node> >();
 		for(auto CI = transformData.begin(), CE = transformData.end(); CI != CE; ++CI)
 		{
 			YAML::Node node = *CI;
