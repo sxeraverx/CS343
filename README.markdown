@@ -7,7 +7,8 @@ Refactoiral is a Clang-based refactoring tool for C, C++, Objective-C, and Objec
 
 There are two ways to install Refactorial:
 
-*   Download a pre-built binary. Currently on Mac OS X only. Available soon.
+*   Download a pre-built binary. Currently on Mac OS X only. Get it here:
+    https://github.com/lukhnos/refactorial/downloads
 *   Build on your own. See below.
 
 ## Building Refactorial
@@ -77,14 +78,28 @@ Then build Refactorial with:
 
 ### Generating `compile_commands.json`
 
-Needed for your CMake projects.
+Clang-based tools (to be specific, those that use LibTooling) use the
+"compilation database" to know which source files to parse with which
+compiler options. It can be seen as a condensed Makefile.
+
+CMake, which is a popular GNU Autotools replacement ("`./configure; make`"),
+will happily generate the compilation database for your CMake project:
 
     cmake -DCMAKE_EXPORT_COMPILE_COMMANDS:STRING=ON <your build dir>
+    
+LLVM incidentally also uses CMake, and so do many popular open source projects.
+
+There is currently no way to generate a compilation database out of a
+Makefile or an IDE project (e.g. Microsoft `.vcproj` or Xcode's `.xcodeproj`).
+That's something that we need to work on.
 
 
 ## Transforms Provided
 
-Documentation upcoming.
+Documentation upcoming. Before that, take a look at our test cases in
+`tests/`. You can get an idea what each source transform does and which
+parameters they take.
+
 
 ## Copyright License
 
