@@ -108,11 +108,11 @@ Documentation upcoming. Before that, take a look at our test cases in
 parameters they take.
 
 
-## Copyright License
+## Copyright and License
 
 Copyright © 2012 Lukhnos Liu and Thomas Minor.
 
-MIT License:
+Released under the MIT License.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
