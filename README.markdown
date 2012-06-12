@@ -63,7 +63,7 @@ do).
 You can safely skip this section.
 
 If you really want to build Refactorial with C++11 enabled, you will also need
-to install libc++ (rev 157242, recent versions won't work). Build all
+to install libc++ (rev 157242; more recent versions won't work). Build all
 dependencies (all of them use CMake) with:
 
     cmake -DCMAKE_BUILD_TYPE:STRING=Release \
