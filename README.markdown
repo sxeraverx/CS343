@@ -104,12 +104,12 @@ That's something that we need to work on.
 
 ## Transforms Provided
 
-*   Accessor: Synthesize getters and setters for designated member variables
-*   MethodMove: Move inlined member function bodies to the implementation file
-*   ExtractParameter: promote a function variable to a parameter to that function
-*   TypeRename: Rename types, including tag types (enum, struct, union, class), template classes, Objective-C types (class and protocol), typedefs and even bulit-in types (e.g. `unsigned` to `uint32_t`)
-*   RecordFieldRename: Rename record fields, including C++ member variables
-*   FunctionRename: Rename functions, including C++ member functions
+*   **Accessor**: Synthesize getters and setters for designated member variables
+*   **MethodMove**: Move inlined member function bodies to the implementation file
+*   **ExtractParameter**: promote a function variable to a parameter to that function
+*   **TypeRename**: Rename types, including tag types (enum, struct, union, class), template classes, Objective-C types (class and protocol), typedefs and even bulit-in types (e.g. `unsigned` to `uint32_t`)
+*   **RecordFieldRename**: Rename record (struct, union) fields, including C++ member variables
+*   **FunctionRename**: Rename functions, including C++ member functions
 
 You tell Refactorial using a YAML config file. For example, to rename all
 classes with the prefix `Tree` to `Trie`, you can write a `refactor.yml` like
